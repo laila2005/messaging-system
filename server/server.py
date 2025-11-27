@@ -39,7 +39,7 @@ class ChatServer:
         finally:
             self.clients.remove(client_socket)
             client_socket.close()
-    
+    #hello
     def broadcast(self, message, sender_socket):
         for client in self.clients:
             if client != sender_socket:
