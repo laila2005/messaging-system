@@ -1,0 +1,11 @@
+# Ignore database files
+*.db
+*.db-journal
+
+# Ignore log files
+logs/*.log
+logs/*.txt
+
+# But keep the directory structure
+!.gitkeep
+!logs/.gitkeep
