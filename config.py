@@ -1,0 +1,35 @@
+# Configuration File - Central settings for the chat system
+
+# Server Configuration
+SERVER_HOST = '127.0.0.1'  # localhost
+SERVER_PORT = 5555
+MAX_CONNECTIONS = 100
+
+# Database Configuration
+DATABASE_NAME = 'data/chat_system.db'
+
+# Encryption Configuration
+ENCRYPTION_KEY = 'SecureBusinessChat2024Key!'  # Must be same on server and client
+
+# Message Configuration
+MAX_MESSAGE_LENGTH = 4096
+BUFFER_SIZE = 4096
+
+# GUI Configuration
+GUI_WIDTH = 800
+GUI_HEIGHT = 600
+CHAT_DISPLAY_HEIGHT = 25
+CHAT_DISPLAY_WIDTH = 80
+
+# Protocol Messages
+AUTH_REQUIRED = 'AUTH_REQUIRED'
+AUTH_SUCCESS = 'AUTH_SUCCESS'
+AUTH_FAILED = 'AUTH_FAILED'
+ENTER_USERNAME = 'ENTER_USERNAME'
+ENTER_PASSWORD = 'ENTER_PASSWORD'
+REGISTRATION_SUCCESS = 'REGISTRATION_SUCCESS'
+REGISTRATION_FAILED = 'REGISTRATION_FAILED'
+USERNAME_EXISTS = 'USERNAME_EXISTS'
+LOGIN = 'LOGIN'
+REGISTER = 'REGISTER'
+DISCONNECT = 'DISCONNECT'

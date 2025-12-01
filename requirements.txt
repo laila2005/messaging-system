@@ -1,0 +1,12 @@
+# Secure Business Chat System - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Encryption library (AES-256)
+pycryptodome==3.19.0
+
+# Note: The following are built-in Python libraries (no installation needed):
+# - socket (networking)
+# - threading (multi-threading)
+# - tkinter (GUI - comes with Python)
+# - sqlite3 (database)
+# - hashlib (password hashing)
