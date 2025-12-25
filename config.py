@@ -1,7 +1,7 @@
 # Configuration File - Central settings for the chat system
 
 # Server Configuration
-SERVER_HOST = '127.0.0.1'  # localhost
+SERVER_HOST = '127.0.0.1' 
 SERVER_PORT = 5555
 MAX_CONNECTIONS = 100
 
@@ -9,7 +9,7 @@ MAX_CONNECTIONS = 100
 DATABASE_NAME = 'data/chat_system.db'
 
 # Encryption Configuration
-ENCRYPTION_KEY = 'SecureBusinessChat2024Key!'  # Must be same on server and client
+ENCRYPTION_KEY = 'SecureBusinessChat2024Key!' 
 
 # Message Configuration
 MAX_MESSAGE_LENGTH = 4096

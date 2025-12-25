@@ -24,17 +24,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from database.database import Database
-from security.encryption import MessageEncryption
+from security.tls_setup import TLSConfig
 
 
 class ChatServer:
     """
-    Multi-threaded chat server with encryption and authentication.
+    Multi-threaded chat server with TLS encryption and authentication.
     
     Features:
-    - TCP socket server
+    - TCP socket server with TLS encryption
     - User authentication (login/register)
-    - AES-256 message encryption
     - Real-time message broadcasting
     - Database logging
     - Multi-client support with threading
@@ -66,8 +65,11 @@ class ChatServer:
         # Initialize database
         self.database = Database(config.DATABASE_NAME)
         
-        # Initialize encryption
-        self.encryption = MessageEncryption(config.ENCRYPTION_KEY)
+        # Initialize TLS configuration
+        self.tls_config = TLSConfig()
+        if not self.tls_config.verify_certificates():
+            print("[!] TLS certificates not found. Generating new ones...")
+            self.tls_config.generate_self_signed_cert()
         
         # Server running flag
         self.running = False
@@ -79,6 +81,7 @@ class ChatServer:
         print(f"Port: {self.port}")
         print(f"Max Connections: {config.MAX_CONNECTIONS}")
         print(f"Database: {config.DATABASE_NAME}")
+        print(f"TLS: Enabled (self-signed certificate)")
         print("="*60 + "\n")
     
     def start(self):
@@ -92,6 +95,10 @@ class ChatServer:
         4. Creates a new thread for each client
         """
         try:
+            # Create TLS context and wrap socket BEFORE binding
+            tls_context = self.tls_config.create_server_context()
+            self.server_socket = tls_context.wrap_socket(self.server_socket, server_side=True)
+            
             # Bind socket to address
             self.server_socket.bind((self.host, self.port))
             
@@ -100,8 +107,8 @@ class ChatServer:
             
             self.running = True
             print(f" Server started successfully!")
-            print(f" Listening on {self.host}:{self.port}")
-            print(f" Waiting for connections...\n")
+            print(f" Listening on {self.host}:{self.port} (TLS)")
+            print(f" Waiting for secure connections...\n")
             
             # Main server loop - accept connections
             while self.running:
@@ -183,15 +190,14 @@ class ChatServer:
             # Step 6: Main message loop
             while self.running:
                 try:
-                    # Receive encrypted message
-                    encrypted_data = client_socket.recv(config.BUFFER_SIZE)
+                    # Receive message (already encrypted via TLS)
+                    message_data = client_socket.recv(config.BUFFER_SIZE)
                     
-                    if not encrypted_data:
+                    if not message_data:
                         break  # Client disconnected
                     
-                    # Decrypt message
-                    encrypted_message = encrypted_data.decode('utf-8')
-                    message = self.encryption.decrypt(encrypted_message)
+                    # Decode message (TLS provides transport encryption)
+                    message = message_data.decode('utf-8')
                     
                     # Check for disconnect command
                     if message.strip().upper() == '/QUIT':
@@ -323,23 +329,20 @@ class ChatServer:
             if history:
                 # Send header
                 header_msg = f"[SERVER] === Recent Chat History ({len(history)} messages) ==="
-                encrypted_header = self.encryption.encrypt(header_msg)
-                client_socket.send(encrypted_header.encode('utf-8'))
+                client_socket.send(header_msg.encode('utf-8'))
                 
                 # Send each historical message with small delay to prevent loss
                 import time
                 for username, message, timestamp in history:
                     # Format: username: message
                     formatted_msg = f"{username}: {message}"
-                    encrypted_msg = self.encryption.encrypt(formatted_msg)
-                    client_socket.send(encrypted_msg.encode('utf-8'))
+                    client_socket.send(formatted_msg.encode('utf-8'))
                     # Small delay to ensure message is received before next one
                     time.sleep(0.01)
                 
                 # Send footer
                 footer_msg = "[SERVER] === End of History ==="
-                encrypted_footer = self.encryption.encrypt(footer_msg)
-                client_socket.send(encrypted_footer.encode('utf-8'))
+                client_socket.send(footer_msg.encode('utf-8'))
                 
                 print(f"[*] Sent {len(history)} messages from history")
         
@@ -362,16 +365,15 @@ class ChatServer:
             # Format user list message
             users_msg = f"[USERS_LIST] {','.join(online_users)}"
             
-            # Encrypt message
-            encrypted_msg = self.encryption.encrypt(users_msg)
-            encrypted_data = encrypted_msg.encode('utf-8')
+            # Send message (TLS provides encryption)
+            message_data = users_msg.encode('utf-8')
             
             # Send to all authenticated clients
             with self.clients_lock:
                 disconnected = []
                 for client_socket in self.clients:
                     try:
-                        client_socket.send(encrypted_data)
+                        client_socket.send(message_data)
                     except Exception as e:
                         print(f"[!] Error sending user list to client: {e}")
                         disconnected.append(client_socket)
@@ -396,9 +398,8 @@ class ChatServer:
             message (str): Message to broadcast
             sender_socket: Socket of sender (or None to send to all)
         """
-        # Encrypt message
-        encrypted_message = self.encryption.encrypt(message)
-        encrypted_data = encrypted_message.encode('utf-8')
+        # Send message (TLS provides encryption)
+        message_data = message.encode('utf-8')
         
         # Send to all clients (thread-safe)
         with self.clients_lock:
@@ -410,7 +411,7 @@ class ChatServer:
                     continue
                 
                 try:
-                    client_socket.send(encrypted_data)
+                    client_socket.send(message_data)
                 except Exception as e:
                     # Mark for removal if send fails
                     disconnected.append(client_socket)

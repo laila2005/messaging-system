@@ -22,16 +22,17 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
-from security.encryption import MessageEncryption
+from security.tls_setup import TLSConfig
 
 
 class ChatClient:
     """
-    Command-line chat client with encryption and authentication.
+    Command-line chat client with TLS encryption and authentication.
     
     Architecture:
     - Main thread: Handles user input and sending messages
     - Receive thread: Constantly listens for incoming messages
+    - TLS provides transport-layer encryption
     """
     
     def __init__(self, host=None, port=None):
@@ -48,8 +49,8 @@ class ChatClient:
         # Create socket
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
-        # Initialize encryption
-        self.encryption = MessageEncryption(config.ENCRYPTION_KEY)
+        # Initialize TLS configuration
+        self.tls_config = TLSConfig()
         
         # Client state
         self.running = False
@@ -61,15 +62,27 @@ class ChatClient:
     
     def connect(self):
         """
-        Connect to the chat server.
+        Connect to the chat server using TLS.
         
         Returns:
             bool: True if connection successful
         """
         try:
-            print(f"\n[*] Connecting to {self.host}:{self.port}...")
+            print(f"\n[*] Connecting to {self.host}:{self.port} (TLS)...")
+            
+            # Create TLS context for client
+            tls_context = self.tls_config.create_client_context(verify=False)
+            
+            # Wrap socket with TLS
+            self.client_socket = tls_context.wrap_socket(
+                self.client_socket, 
+                server_hostname=self.host
+            )
+            
+            # Connect to server
             self.client_socket.connect((self.host, self.port))
-            print(" Connected to server!")
+            
+            print(" Connected to server with TLS encryption!")
             return True
         except Exception as e:
             print(f" Connection failed: {e}")
@@ -169,17 +182,16 @@ class ChatClient:
         """
         while self.running:
             try:
-                # Receive encrypted message
-                encrypted_data = self.client_socket.recv(config.BUFFER_SIZE)
+                # Receive message (TLS provides encryption)
+                message_data = self.client_socket.recv(config.BUFFER_SIZE)
                 
-                if not encrypted_data:
+                if not message_data:
                     print("\n[!] Connection closed by server")
                     self.running = False
                     break
                 
-                # Decrypt message
-                encrypted_message = encrypted_data.decode('utf-8')
-                message = self.encryption.decrypt(encrypted_message)
+                # Decode message
+                message = message_data.decode('utf-8')
                 
                 # Display message
                 print(f"\n{message}")
@@ -217,9 +229,9 @@ class ChatClient:
                 if not message.strip():
                     continue
                 
-                # Encrypt and send
-                encrypted_message = self.encryption.encrypt(message)
-                self.client_socket.send(encrypted_message.encode('utf-8'))
+                # Send message (TLS provides encryption)
+                message_data = message.encode('utf-8')
+                self.client_socket.send(message_data)
             
             except KeyboardInterrupt:
                 print("\n[*] Disconnecting...")

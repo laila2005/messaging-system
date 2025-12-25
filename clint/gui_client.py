@@ -29,7 +29,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
-from security.encryption import MessageEncryption
+from security.tls_setup import TLSConfig
 
 
 class LoginWindow:
@@ -243,8 +243,8 @@ class ChatGUI:
         # Create socket
         self.client_socket = None
         
-        # Initialize encryption
-        self.encryption = MessageEncryption(config.ENCRYPTION_KEY)
+        # Initialize TLS configuration
+        self.tls_config = TLSConfig()
         
         # Client state
         self.running = False
@@ -314,7 +314,7 @@ class ChatGUI:
         
         self.connection_status = tk.Label(
             top_frame,
-            text="● Offline",
+            text="● Offline (TLS)",
             bg="#0f3460",
             fg="#ff6b6b",
             font=("Segoe UI", 9)
@@ -488,11 +488,20 @@ class ChatGUI:
             pass
     
     def connect(self):
-        """Connect to the chat server."""
+        """Connect to the chat server using TLS."""
         try:
-            self.display_message(f"[*] Connecting to {self.host}:{self.port}...", "server")
+            self.display_message(f"[*] Connecting to {self.host}:{self.port} (TLS)...", "server")
             
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            
+            # Create TLS context for client
+            tls_context = self.tls_config.create_client_context(verify=False)
+            
+            # Wrap socket with TLS
+            self.client_socket = tls_context.wrap_socket(
+                self.client_socket, 
+                server_hostname=self.host
+            )
             
             # Set socket options to prevent connection issues
             self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -501,9 +510,10 @@ class ChatGUI:
             # Set timeout for receive operations (30 seconds)
             self.client_socket.settimeout(30.0)
             
+            # Connect to server
             self.client_socket.connect((self.host, self.port))
             
-            self.display_message("✓ Connected to server!", "server")
+            self.display_message("✓ Connected to server with TLS encryption!", "server")
             return True
         
         except Exception as e:
@@ -561,8 +571,8 @@ class ChatGUI:
                 self.username = parts[1] if len(parts) > 1 else login_window.username
                 
                 self.display_message(f"✓ Logged in as: {self.username}", "server")
-                self.status_label.config(text=f"🔒 Secure Business Chat - Connected as {self.username}")
-                self.connection_status.config(text="● Online", fg="#51cf66")
+                self.status_label.config(text=f"🔒 Secure Business Chat - Connected as {self.username} (TLS)")
+                self.connection_status.config(text="● Online (TLS)", fg="#51cf66")
                 
                 # Don't add self here - server will send complete user list via [USERS_LIST]
                 
@@ -594,21 +604,16 @@ class ChatGUI:
         """Continuously receive messages from server (runs in separate thread)."""
         while self.running:
             try:
-                # Receive encrypted message
-                encrypted_data = self.client_socket.recv(config.BUFFER_SIZE)
+                # Receive message (TLS provides encryption)
+                message_data = self.client_socket.recv(config.BUFFER_SIZE)
                 
-                if not encrypted_data:
+                if not message_data:
                     self.display_message("[!] Connection closed by server", "server")
                     self.running = False
                     break
                 
-                # Decrypt message
-                encrypted_message = encrypted_data.decode('utf-8')
-                try:
-                    message = self.encryption.decrypt(encrypted_message)
-                except Exception as e:
-                    print(f"[!] Decryption error: {e}")
-                    continue
+                # Decode message (TLS provides transport encryption)
+                message = message_data.decode('utf-8')
                 
                 # Determine message type and display
                 # Note: We skip our own messages since we display them when sending
@@ -665,9 +670,9 @@ class ChatGUI:
             formatted_message = f"{self.username}: {message}"
             self.display_message(formatted_message, "self")
             
-            # Encrypt and send
-            encrypted_message = self.encryption.encrypt(message)
-            self.client_socket.send(encrypted_message.encode('utf-8'))
+            # Send message (TLS provides encryption)
+            message_data = message.encode('utf-8')
+            self.client_socket.send(message_data)
         
         except Exception as e:
             self.display_message(f"[!] Error sending message: {e}", "server")
@@ -737,7 +742,7 @@ MENU OPTIONS:
 • File → Exit - Close the application
 
 FEATURES:
-• Real-time encrypted messaging
+• Real-time TLS-encrypted messaging
 • Color-coded messages:
   - Red: Server messages
   - Green: Your messages
@@ -747,7 +752,7 @@ FEATURES:
 • Modern professional UI
 
 TIPS:
-• Messages are encrypted with AES-256
+• Messages are encrypted with TLS 1.2+
 • All messages are saved to database
 • Use strong passwords for security
         """
@@ -757,17 +762,18 @@ TIPS:
         """Show about dialog."""
         about_text = """
 🔒 Secure Business Chat System
-Version 2.0
+Version 2.1 (TLS Edition)
 
-Enterprise-Grade Encrypted Messaging
+Enterprise-Grade Secure Messaging
 
 Features:
-✓ AES-256 Encryption
+✓ TLS 1.2+ Transport Encryption
 ✓ Multi-threaded Server
 ✓ Real-time Communication
 ✓ User Authentication
 ✓ Message History
 ✓ Professional UI/UX
+✓ Certificate-based Security
 
 Developed with Python & Tkinter
 © 2024 Secure Business Chat
