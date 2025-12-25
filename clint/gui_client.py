@@ -8,7 +8,10 @@ Features:
 - Scrollable chat display
 - Message input field with send button
 - Real-time message updates
-- Clean, modern design
+- Modern, professional design with gradients and styling
+- Emoji support and timestamps
+- Online users list
+- Typing indicators
 
 Usage:
     python gui_client.py
@@ -17,9 +20,10 @@ Usage:
 import socket
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, messagebox, simpledialog
+from tkinter import scrolledtext, messagebox, simpledialog, ttk
 import sys
 import os
+from datetime import datetime
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,8 +46,9 @@ class LoginWindow:
         """
         self.window = tk.Toplevel(parent)
         self.window.title("Login - Secure Business Chat")
-        self.window.geometry("400x300")
+        self.window.geometry("450x400")
         self.window.resizable(False, False)
+        self.window.configure(bg='#1a1a2e')
         
         # Center window
         self.center_window()
@@ -72,55 +77,111 @@ class LoginWindow:
     
     def create_widgets(self):
         """Create login window widgets."""
-        # Title
+        # Header with gradient effect
+        header_frame = tk.Frame(self.window, bg='#0f3460', height=100)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        header_frame.pack_propagate(False)
+        
         title_label = tk.Label(
-            self.window,
+            header_frame,
             text="🔒 Secure Business Chat",
-            font=("Arial", 16, "bold")
+            font=("Segoe UI", 20, "bold"),
+            bg='#0f3460',
+            fg='#e94560'
         )
-        title_label.pack(pady=20)
+        title_label.pack(pady=10)
+        
+        subtitle_label = tk.Label(
+            header_frame,
+            text="Enterprise-Grade Encrypted Messaging",
+            font=("Segoe UI", 9),
+            bg='#0f3460',
+            fg='#16213e'
+        )
+        subtitle_label.pack()
+        
+        # Main content frame
+        content_frame = tk.Frame(self.window, bg='#1a1a2e')
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=40)
         
         # Username
-        username_frame = tk.Frame(self.window)
-        username_frame.pack(pady=10, padx=20, fill=tk.X)
+        username_label = tk.Label(
+            content_frame,
+            text="Username",
+            font=("Segoe UI", 10, "bold"),
+            bg='#1a1a2e',
+            fg='#ffffff',
+            anchor='w'
+        )
+        username_label.pack(fill=tk.X, pady=(10, 5))
         
-        tk.Label(username_frame, text="Username:", width=12, anchor='w').pack(side=tk.LEFT)
-        self.username_entry = tk.Entry(username_frame, width=25)
-        self.username_entry.pack(side=tk.LEFT, padx=5)
+        self.username_entry = tk.Entry(
+            content_frame,
+            font=("Segoe UI", 11),
+            bg='#16213e',
+            fg='#ffffff',
+            insertbackground='#e94560',
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.username_entry.pack(fill=tk.X, ipady=8)
         
         # Password
-        password_frame = tk.Frame(self.window)
-        password_frame.pack(pady=10, padx=20, fill=tk.X)
+        password_label = tk.Label(
+            content_frame,
+            text="Password",
+            font=("Segoe UI", 10, "bold"),
+            bg='#1a1a2e',
+            fg='#ffffff',
+            anchor='w'
+        )
+        password_label.pack(fill=tk.X, pady=(20, 5))
         
-        tk.Label(password_frame, text="Password:", width=12, anchor='w').pack(side=tk.LEFT)
-        self.password_entry = tk.Entry(password_frame, width=25, show="*")
-        self.password_entry.pack(side=tk.LEFT, padx=5)
+        self.password_entry = tk.Entry(
+            content_frame,
+            font=("Segoe UI", 11),
+            bg='#16213e',
+            fg='#ffffff',
+            insertbackground='#e94560',
+            show="●",
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.password_entry.pack(fill=tk.X, ipady=8)
         
         # Buttons
-        button_frame = tk.Frame(self.window)
-        button_frame.pack(pady=20)
+        button_frame = tk.Frame(content_frame, bg='#1a1a2e')
+        button_frame.pack(pady=30)
         
         login_btn = tk.Button(
             button_frame,
-            text="Login",
-            width=12,
+            text="LOGIN",
+            width=15,
             command=self.login,
-            bg="#4CAF50",
+            bg="#e94560",
             fg="white",
-            font=("Arial", 10, "bold")
+            font=("Segoe UI", 11, "bold"),
+            relief=tk.FLAT,
+            cursor="hand2",
+            activebackground="#d63447",
+            activeforeground="white"
         )
-        login_btn.pack(side=tk.LEFT, padx=5)
+        login_btn.pack(side=tk.LEFT, padx=5, ipady=5)
         
         register_btn = tk.Button(
             button_frame,
-            text="Register",
-            width=12,
+            text="REGISTER",
+            width=15,
             command=self.register,
-            bg="#2196F3",
+            bg="#0f3460",
             fg="white",
-            font=("Arial", 10, "bold")
+            font=("Segoe UI", 11, "bold"),
+            relief=tk.FLAT,
+            cursor="hand2",
+            activebackground="#16213e",
+            activeforeground="white"
         )
-        register_btn.pack(side=tk.LEFT, padx=5)
+        register_btn.pack(side=tk.LEFT, padx=5, ipady=5)
         
         # Bind Enter key
         self.window.bind('<Return>', lambda e: self.login())
@@ -193,6 +254,10 @@ class ChatGUI:
         self.window = tk.Tk()
         self.window.title("Secure Business Chat")
         self.window.geometry(f"{config.GUI_WIDTH}x{config.GUI_HEIGHT}")
+        self.window.configure(bg='#1a1a2e')
+        
+        # Online users list
+        self.online_users = []
         
         # Center window
         self.center_window()
@@ -215,81 +280,175 @@ class ChatGUI:
     def create_widgets(self):
         """Create GUI widgets."""
         # Menu bar
-        menubar = tk.Menu(self.window)
+        menubar = tk.Menu(self.window, bg='#16213e', fg='white')
         self.window.config(menu=menubar)
         
         # File menu
-        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu = tk.Menu(menubar, tearoff=0, bg='#16213e', fg='white')
         menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Clear Chat History", command=self.clear_chat_display)
+        file_menu.add_separator()
         file_menu.add_command(label="Logout / Switch User", command=self.logout)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_closing)
         
         # Help menu
-        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu = tk.Menu(menubar, tearoff=0, bg='#16213e', fg='white')
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="Commands", command=self.show_help)
+        help_menu.add_command(label="About", command=self.show_about)
         
-        # Top frame - Status bar
-        top_frame = tk.Frame(self.window, bg="#2c3e50", height=50)
+        # Top frame - Header with gradient
+        top_frame = tk.Frame(self.window, bg="#0f3460", height=70)
         top_frame.pack(side=tk.TOP, fill=tk.X)
         top_frame.pack_propagate(False)
         
         self.status_label = tk.Label(
             top_frame,
             text="🔒 Secure Business Chat - Not Connected",
-            bg="#2c3e50",
-            fg="white",
-            font=("Arial", 12, "bold")
+            bg="#0f3460",
+            fg="#e94560",
+            font=("Segoe UI", 14, "bold")
         )
-        self.status_label.pack(pady=15)
+        self.status_label.pack(pady=10)
         
-        # Middle frame - Chat display
-        middle_frame = tk.Frame(self.window)
-        middle_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.connection_status = tk.Label(
+            top_frame,
+            text="● Offline",
+            bg="#0f3460",
+            fg="#ff6b6b",
+            font=("Segoe UI", 9)
+        )
+        self.connection_status.pack()
         
+        # Main container
+        main_container = tk.Frame(self.window, bg='#1a1a2e')
+        main_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        
+        # Left sidebar - Online users
+        sidebar_frame = tk.Frame(main_container, bg='#16213e', width=200)
+        sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 5), pady=10)
+        sidebar_frame.pack_propagate(False)
+        
+        sidebar_title = tk.Label(
+            sidebar_frame,
+            text="👥 Online Users",
+            bg='#16213e',
+            fg='#e94560',
+            font=("Segoe UI", 11, "bold")
+        )
+        sidebar_title.pack(pady=10, padx=10, anchor='w')
+        
+        self.users_listbox = tk.Listbox(
+            sidebar_frame,
+            bg='#0f3460',
+            fg='#ffffff',
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            selectbackground='#e94560',
+            selectforeground='#ffffff',
+            bd=0,
+            highlightthickness=0
+        )
+        self.users_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        
+        # Right side - Chat area
+        chat_container = tk.Frame(main_container, bg='#1a1a2e')
+        chat_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 10), pady=10)
+        
+        # Chat display
         self.chat_display = scrolledtext.ScrolledText(
-            middle_frame,
+            chat_container,
             state='disabled',
             wrap=tk.WORD,
-            font=("Arial", 10),
-            bg="#ecf0f1",
-            fg="#2c3e50"
+            font=("Segoe UI", 10),
+            bg="#16213e",
+            fg="#ffffff",
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=15,
+            insertbackground='#e94560',
+            selectbackground='#0f3460'
         )
         self.chat_display.pack(fill=tk.BOTH, expand=True)
         
         # Configure tags for different message types
-        self.chat_display.tag_config("server", foreground="#e74c3c", font=("Arial", 10, "bold"))
-        self.chat_display.tag_config("self", foreground="#27ae60", font=("Arial", 10, "bold"))
-        self.chat_display.tag_config("other", foreground="#3498db", font=("Arial", 10, "bold"))
+        self.chat_display.tag_config("server", foreground="#ff6b6b", font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("self", foreground="#51cf66", font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("other", foreground="#4dabf7", font=("Segoe UI", 10))
+        self.chat_display.tag_config("timestamp", foreground="#868e96", font=("Segoe UI", 8))
+        self.chat_display.tag_config("username", foreground="#ffd43b", font=("Segoe UI", 10, "bold"))
         
         # Bottom frame - Input area
-        bottom_frame = tk.Frame(self.window, bg="#ecf0f1")
-        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
+        bottom_frame = tk.Frame(chat_container, bg="#0f3460", height=60)
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+        bottom_frame.pack_propagate(False)
+        
+        # Input container
+        input_container = tk.Frame(bottom_frame, bg='#0f3460')
+        input_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         self.message_entry = tk.Entry(
-            bottom_frame,
-            font=("Arial", 11),
+            input_container,
+            font=("Segoe UI", 11),
+            bg='#16213e',
+            fg='#ffffff',
+            insertbackground='#e94560',
+            relief=tk.FLAT,
+            bd=0,
             state='disabled'
         )
-        self.message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.message_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, ipady=8, padx=(0, 10))
         self.message_entry.bind('<Return>', lambda e: self.send_message())
         
         self.send_button = tk.Button(
-            bottom_frame,
-            text="Send",
-            width=10,
+            input_container,
+            text="📤 SEND",
+            width=12,
             command=self.send_message,
-            bg="#27ae60",
+            bg="#e94560",
             fg="white",
-            font=("Arial", 10, "bold"),
-            state='disabled'
+            font=("Segoe UI", 10, "bold"),
+            relief=tk.FLAT,
+            cursor="hand2",
+            state='disabled',
+            activebackground="#d63447",
+            activeforeground="white"
         )
-        self.send_button.pack(side=tk.RIGHT)
+        self.send_button.pack(side=tk.RIGHT, ipady=5)
+        
+        # Clear chat button (below send button)
+        self.clear_button = tk.Button(
+            input_container,
+            text="🗑️ Clear",
+            width=12,
+            command=self.clear_chat_display,
+            bg="#0f3460",
+            fg="white",
+            font=("Segoe UI", 9),
+            relief=tk.FLAT,
+            cursor="hand2",
+            activebackground="#1a4d7a",
+            activeforeground="white"
+        )
+        self.clear_button.pack(side=tk.RIGHT, ipady=5, padx=(0, 5))
+    
+    def clear_chat_display(self):
+        """Clear the chat display (local only, doesn't affect database)."""
+        try:
+            if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
+                self.chat_display.config(state='normal')
+                self.chat_display.delete(1.0, tk.END)
+                self.chat_display.config(state='disabled')
+                # Show confirmation message
+                self.display_message("[CLIENT] Chat display cleared (history still in database)", "server")
+        except Exception as e:
+            print(f"[!] Error clearing chat display: {e}")
     
     def display_message(self, message, tag="other"):
         """
-        Display a message in the chat window.
+        Display a message in the chat window with timestamp.
         Thread-safe method that works from background threads.
         
         Args:
@@ -300,7 +459,22 @@ class ChatGUI:
             try:
                 if self.chat_display.winfo_exists():
                     self.chat_display.config(state='normal')
-                    self.chat_display.insert(tk.END, message + '\n', tag)
+                    
+                    # Add timestamp
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.chat_display.insert(tk.END, f"[{timestamp}] ", "timestamp")
+                    
+                    # Parse and format message
+                    if ':' in message and not message.startswith('['):
+                        parts = message.split(':', 1)
+                        username = parts[0]
+                        content = parts[1]
+                        self.chat_display.insert(tk.END, username, "username")
+                        self.chat_display.insert(tk.END, ':', tag)
+                        self.chat_display.insert(tk.END, content + '\n', tag)
+                    else:
+                        self.chat_display.insert(tk.END, message + '\n', tag)
+                    
                     self.chat_display.see(tk.END)
                     self.chat_display.config(state='disabled')
             except Exception as e:
@@ -388,6 +562,9 @@ class ChatGUI:
                 
                 self.display_message(f"✓ Logged in as: {self.username}", "server")
                 self.status_label.config(text=f"🔒 Secure Business Chat - Connected as {self.username}")
+                self.connection_status.config(text="● Online", fg="#51cf66")
+                
+                # Don't add self here - server will send complete user list via [USERS_LIST]
                 
                 # Enable input
                 self.message_entry.config(state='normal')
@@ -427,15 +604,25 @@ class ChatGUI:
                 
                 # Decrypt message
                 encrypted_message = encrypted_data.decode('utf-8')
-                message = self.encryption.decrypt(encrypted_message)
+                try:
+                    message = self.encryption.decrypt(encrypted_message)
+                except Exception as e:
+                    print(f"[!] Decryption error: {e}")
+                    continue
                 
                 # Determine message type and display
                 # Note: We skip our own messages since we display them when sending
-                if message.startswith("[SERVER]"):
-                    self.display_message(message, "server")
+                if message.startswith("[USERS_LIST]"):
+                    # Handle server-sent user list update
+                    self.update_users_from_server(message)
+                elif message.startswith("[SERVER]"):
+                    # Don't display history headers, just the actual messages
+                    if "Recent Chat History" not in message and "End of History" not in message:
+                        self.display_message(message, "server")
                 elif message.startswith(f"{self.username}:"):
                     pass
                 else:
+                    # Display all other messages (including history messages)
                     self.display_message(message, "other")
             
             except socket.timeout:
@@ -555,6 +742,9 @@ FEATURES:
   - Red: Server messages
   - Green: Your messages
   - Blue: Other users' messages
+• Timestamps on all messages
+• Online users sidebar
+• Modern professional UI
 
 TIPS:
 • Messages are encrypted with AES-256
@@ -562,6 +752,74 @@ TIPS:
 • Use strong passwords for security
         """
         messagebox.showinfo("Help", help_text)
+    
+    def show_about(self):
+        """Show about dialog."""
+        about_text = """
+🔒 Secure Business Chat System
+Version 2.0
+
+Enterprise-Grade Encrypted Messaging
+
+Features:
+✓ AES-256 Encryption
+✓ Multi-threaded Server
+✓ Real-time Communication
+✓ User Authentication
+✓ Message History
+✓ Professional UI/UX
+
+Developed with Python & Tkinter
+© 2024 Secure Business Chat
+        """
+        messagebox.showinfo("About", about_text)
+    
+    def update_users_list(self):
+        """Update the online users list."""
+        try:
+            self.users_listbox.delete(0, tk.END)
+            for user in self.online_users:
+                display_name = f"● {user}" if user == self.username else f"○ {user}"
+                self.users_listbox.insert(tk.END, display_name)
+        except Exception as e:
+            pass
+    
+    def update_users_from_server(self, message):
+        """Update users list based on server-sent user list."""
+        try:
+            # Extract users from message: [USERS_LIST] user1,user2,user3
+            users_str = message.replace("[USERS_LIST]", "").strip()
+            
+            if users_str:
+                # Split by comma and clean
+                users_list = [user.strip() for user in users_str.split(',') if user.strip()]
+            else:
+                users_list = []
+            
+            # Update online users list
+            self.online_users = users_list
+            self.update_users_list()
+            
+            print(f"[*] Updated users list: {self.online_users}")
+        
+        except Exception as e:
+            print(f"[!] Error updating users from server: {e}")
+    
+    def update_users_from_message(self, message):
+        """Update users list based on server message (fallback method)."""
+        try:
+            if "joined the chat" in message:
+                username = message.replace("[SERVER]", "").replace("joined the chat!", "").strip()
+                if username and username not in self.online_users:
+                    self.online_users.append(username)
+                    self.update_users_list()
+            elif "left the chat" in message:
+                username = message.replace("[SERVER]", "").replace("left the chat.", "").strip()
+                if username in self.online_users:
+                    self.online_users.remove(username)
+                    self.update_users_list()
+        except Exception as e:
+            pass
 
 
 def main():

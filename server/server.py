@@ -163,11 +163,24 @@ class ChatServer:
             print(f"[+] {username} authenticated from {address[0]}:{address[1]}")
             print(f"[*] Active users: {len(self.clients)}")
             
-            # Step 3: Send welcome message
+            # Small delay to ensure client's receive loop is ready
+            import time
+            time.sleep(0.1)
+            
+            # Step 3: Send chat history to newly connected user
+            self.send_chat_history(client_socket)
+            
+            # Small delay after history to ensure client processed all messages
+            time.sleep(0.05)
+            
+            # Step 4: Send current user list to all clients
+            self.broadcast_user_list()
+            
+            # Step 5: Send welcome message
             welcome_msg = f"[SERVER] {username} joined the chat!"
             self.broadcast_message(welcome_msg, client_socket)
             
-            # Step 4: Main message loop
+            # Step 6: Main message loop
             while self.running:
                 try:
                     # Receive encrypted message
@@ -213,6 +226,9 @@ class ChatServer:
                 # Broadcast leave message
                 leave_msg = f"[SERVER] {username} left the chat."
                 self.broadcast_message(leave_msg, None)
+                
+                # Broadcast updated user list
+                self.broadcast_user_list()
                 
                 print(f"[-] {username} disconnected")
                 print(f"[*] Active users: {len(self.clients)}")
@@ -291,6 +307,86 @@ class ChatServer:
         except Exception as e:
             print(f"[!] Authentication error: {e}")
             return None
+    
+    def send_chat_history(self, client_socket, limit=20):
+        """
+        Send recent chat history to a newly connected client.
+        
+        Args:
+            client_socket: Socket of the newly connected client
+            limit (int): Number of recent messages to send (default: 20)
+        """
+        try:
+            # Get recent messages from database
+            history = self.database.get_chat_history(limit)
+            
+            if history:
+                # Send header
+                header_msg = f"[SERVER] === Recent Chat History ({len(history)} messages) ==="
+                encrypted_header = self.encryption.encrypt(header_msg)
+                client_socket.send(encrypted_header.encode('utf-8'))
+                
+                # Send each historical message with small delay to prevent loss
+                import time
+                for username, message, timestamp in history:
+                    # Format: username: message
+                    formatted_msg = f"{username}: {message}"
+                    encrypted_msg = self.encryption.encrypt(formatted_msg)
+                    client_socket.send(encrypted_msg.encode('utf-8'))
+                    # Small delay to ensure message is received before next one
+                    time.sleep(0.01)
+                
+                # Send footer
+                footer_msg = "[SERVER] === End of History ==="
+                encrypted_footer = self.encryption.encrypt(footer_msg)
+                client_socket.send(encrypted_footer.encode('utf-8'))
+                
+                print(f"[*] Sent {len(history)} messages from history")
+        
+        except Exception as e:
+            print(f"[!] Error sending chat history: {e}")
+    
+    def broadcast_user_list(self):
+        """
+        Broadcast current online users list to all connected clients.
+        """
+        try:
+            # Get current online users
+            with self.clients_lock:
+                online_users = list(self.clients.values())
+            
+            # Don't broadcast if no users
+            if not online_users:
+                return
+            
+            # Format user list message
+            users_msg = f"[USERS_LIST] {','.join(online_users)}"
+            
+            # Encrypt message
+            encrypted_msg = self.encryption.encrypt(users_msg)
+            encrypted_data = encrypted_msg.encode('utf-8')
+            
+            # Send to all authenticated clients
+            with self.clients_lock:
+                disconnected = []
+                for client_socket in self.clients:
+                    try:
+                        client_socket.send(encrypted_data)
+                    except Exception as e:
+                        print(f"[!] Error sending user list to client: {e}")
+                        disconnected.append(client_socket)
+                
+                # Remove disconnected clients
+                for client_socket in disconnected:
+                    if client_socket in self.clients:
+                        username = self.clients[client_socket]
+                        del self.clients[client_socket]
+                        print(f"[-] Removed disconnected client during user list broadcast: {username}")
+            
+            print(f"[*] Broadcasted user list: {online_users}")
+        
+        except Exception as e:
+            print(f"[!] Error broadcasting user list: {e}")
     
     def broadcast_message(self, message, sender_socket):
         """
