@@ -26,23 +26,9 @@ from security.tls_setup import TLSConfig
 
 
 class ChatClient:
-    """
-    Command-line chat client with TLS encryption and authentication.
-    
-    Architecture:
-    - Main thread: Handles user input and sending messages
-    - Receive thread: Constantly listens for incoming messages
-    - TLS provides transport-layer encryption
-    """
     
     def __init__(self, host=None, port=None):
-        """
-        Initialize chat client.
-        
-        Args:
-            host (str): Server IP address
-            port (int): Server port number
-        """
+      
         self.host = host or config.SERVER_HOST
         self.port = port or config.SERVER_PORT
         
@@ -61,12 +47,7 @@ class ChatClient:
         print("="*60)
     
     def connect(self):
-        """
-        Connect to the chat server using TLS.
-        
-        Returns:
-            bool: True if connection successful
-        """
+     
         try:
             print(f"\n[*] Connecting to {self.host}:{self.port} (TLS)...")
             
@@ -89,12 +70,7 @@ class ChatClient:
             return False
     
     def authenticate(self):
-        """
-        Handle authentication with server.
-        
-        Returns:
-            bool: True if authentication successful
-        """
+      
         try:
             # Receive AUTH_REQUIRED
             response = self.client_socket.recv(1024).decode('utf-8')

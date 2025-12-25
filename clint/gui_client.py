@@ -1,21 +1,4 @@
 # clint/gui_client.py - Graphical User Interface Chat Client
-"""
-GUI chat client using Tkinter.
-
-Features:
-- User-friendly graphical interface
-- Login/registration windows
-- Scrollable chat display
-- Message input field with send button
-- Real-time message updates
-- Modern, professional design with gradients and styling
-- Emoji support and timestamps
-- Online users list
-- Typing indicators
-
-Usage:
-    python gui_client.py
-"""
 
 import socket
 import threading
@@ -38,12 +21,6 @@ class LoginWindow:
     """
     
     def __init__(self, parent):
-        """
-        Initialize login window.
-        
-        Args:
-            parent: Parent Tkinter window
-        """
         self.window = tk.Toplevel(parent)
         self.window.title("Login - Secure Business Chat")
         self.window.geometry("450x400")
@@ -59,10 +36,8 @@ class LoginWindow:
         self.is_register = False
         self.success = False
         
-        # Create UI
         self.create_widgets()
         
-        # Make modal
         self.window.transient(parent)
         self.window.grab_set()
     
@@ -77,7 +52,6 @@ class LoginWindow:
     
     def create_widgets(self):
         """Create login window widgets."""
-        # Header with gradient effect
         header_frame = tk.Frame(self.window, bg='#0f3460', height=100)
         header_frame.pack(fill=tk.X, pady=(0, 20))
         header_frame.pack_propagate(False)
@@ -230,13 +204,7 @@ class ChatGUI:
     """
     
     def __init__(self, host=None, port=None):
-        """
-        Initialize chat GUI.
-        
-        Args:
-            host (str): Server IP address
-            port (int): Server port number
-        """
+      
         self.host = host or config.SERVER_HOST
         self.port = port or config.SERVER_PORT
         
@@ -447,14 +415,6 @@ class ChatGUI:
             print(f"[!] Error clearing chat display: {e}")
     
     def display_message(self, message, tag="other"):
-        """
-        Display a message in the chat window with timestamp.
-        Thread-safe method that works from background threads.
-        
-        Args:
-            message (str): Message to display
-            tag (str): Tag for formatting (server, self, other)
-        """
         def _display():
             try:
                 if self.chat_display.winfo_exists():
