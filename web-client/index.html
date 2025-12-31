@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Business Chat - Web Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            width: 95%;
+            max-width: 1400px;
+            height: 90vh;
+            max-height: 900px;
+            display: flex;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, #1a1f2e 0%, #2c3e50 100%);
+            color: white;
+            padding: 35px;
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo::before {
+            content: "🔒";
+            font-size: 30px;
+        }
+
+        .features {
+            margin: 35px 0;
+            flex-grow: 1;
+        }
+
+        .features h3 {
+            margin-bottom: 20px;
+            color: #667eea;
+            font-size: 18px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .features ul {
+            list-style: none;
+        }
+
+        .features li {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .features li:hover {
+            padding-left: 8px;
+            color: #667eea;
+        }
+
+        .features li::before {
+            content: "✓";
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .auth-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .auth-section h3 {
+            margin-bottom: 20px;
+            color: #667eea;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            margin-top: 12px;
+            box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 222, 128, 0.4);
+        }
+
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+            scroll-behavior: smooth;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 16px 20px;
+            border-radius: 18px;
+            max-width: 75%;
+            word-wrap: break-word;
+            animation: messageSlide 0.3s ease-out;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.own {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            margin-left: auto;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .message.other {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .message.server {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            text-align: center;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+            font-weight: 500;
+        }
+
+        .message-info {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .chat-input {
+            padding: 25px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 15px;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 25px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+
+        .chat-input input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .chat-input input::placeholder {
+            color: #94a3b8;
+        }
+
+        .chat-input button {
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .chat-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .chat-input button:active {
+            transform: translateY(0);
+        }
+
+        .demo-mode {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: 600;
+            border-radius: 12px;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+            font-size: 14px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                width: 98%;
+                height: 95vh;
+            }
+            
+            .sidebar {
+                width: 320px;
+                padding: 25px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                flex-direction: column;
+                height: 100vh;
+                max-height: none;
+                border-radius: 16px;
+            }
+            
+            .sidebar {
+                width: 100%;
+                padding: 20px;
+                max-height: 40vh;
+            }
+            
+            .logo {
+                font-size: 24px;
+            }
+            
+            .features {
+                margin: 20px 0;
+            }
+            
+            .features h3 {
+                font-size: 16px;
+            }
+            
+            .features li {
+                font-size: 14px;
+                padding: 8px 0;
+            }
+            
+            .auth-section {
+                padding: 20px;
+            }
+            
+            .chat-area {
+                height: 60vh;
+            }
+            
+            .chat-header {
+                padding: 20px;
+            }
+            
+            .chat-header h2 {
+                font-size: 20px;
+            }
+            
+            .chat-messages {
+                padding: 15px;
+            }
+            
+            .message {
+                max-width: 85%;
+                padding: 12px 16px;
+                margin-bottom: 15px;
+            }
+            
+            .chat-input {
+                padding: 15px;
+                gap: 10px;
+            }
+            
+            .chat-input input {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+            
+            .chat-input button {
+                padding: 12px 18px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                padding: 15px;
+            }
+            
+            .logo {
+                font-size: 20px;
+            }
+            
+            .auth-section {
+                padding: 15px;
+            }
+            
+            .btn {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+            
+            .chat-header {
+                padding: 15px;
+            }
+            
+            .chat-header h2 {
+                font-size: 18px;
+            }
+            
+            .chat-messages {
+                padding: 10px;
+            }
+            
+            .message {
+                max-width: 90%;
+                padding: 10px 14px;
+            }
+            
+            .chat-input {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="logo">Secure Business Chat</div>
+            <p style="opacity: 0.8; margin-bottom: 20px;">Real-time encrypted messaging system</p>
+            
+            <div class="features">
+                <h3>🚀 Features</h3>
+                <ul>
+                    <li>AES-256 Encryption</li>
+                    <li>Real-time Messaging</li>
+                    <li>User Authentication</li>
+                    <li>Multi-user Support</li>
+                    <li>Message History</li>
+                    <li>Secure Database Storage</li>
+                </ul>
+            </div>
+            
+            <div class="demo-mode">
+                🎯 Demo Mode - No Server Required
+            </div>
+            
+            <div class="auth-section">
+                <h3>👤 Quick Demo Login</h3>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="Enter username" value="demo">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="Enter password" value="demo">
+                </div>
+                <button class="btn btn-primary" onclick="startDemo()">Start Demo</button>
+                <button class="btn btn-secondary" onclick="registerDemo()">Register New User</button>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header">
+                <h2>🔒 Secure Business Chat Demo</h2>
+                <p>Experience real-time encrypted messaging</p>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message server">
+                    <div class="message-info">System</div>
+                    <div>Welcome to Secure Business Chat! Please login to start chatting.</div>
+                </div>
+            </div>
+            
+            <div class="chat-input hidden" id="chatInput">
+                <input type="text" id="messageInput" placeholder="Type your message here..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let messageHistory = [];
+        
+        function addMessage(type, username, message) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const time = new Date().toLocaleTimeString();
+            let content = '';
+            
+            if (type === 'server') {
+                content = `<div class="message-info">System • ${time}</div><div>${message}</div>`;
+            } else {
+                const isOwn = type === 'own';
+                content = `<div class="message-info">${username} • ${time}</div><div>${message}</div>`;
+            }
+            
+            messageDiv.innerHTML = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Store in history
+            messageHistory.push({ type, username, message, time });
+        }
+        
+        function startDemo() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+            
+            currentUser = username;
+            
+            // Show chat interface
+            document.getElementById('chatInput').classList.remove('hidden');
+            
+            // Add welcome message
+            addMessage('server', 'System', `✓ Authentication successful! Welcome ${username}!`);
+            addMessage('server', 'System', 'You are now connected to the secure chat server.');
+            
+            // Simulate other users
+            setTimeout(() => {
+                addMessage('other', 'Alice', 'Hey everyone! 👋');
+            }, 2000);
+            
+            setTimeout(() => {
+                addMessage('other', 'Bob', 'Hi Alice! How are you?');
+            }, 4000);
+            
+            setTimeout(() => {
+                addMessage('server', 'System', `${username} joined the chat!`);
+            }, 1000);
+        }
+        
+        function registerDemo() {
+            const username = prompt('Enter new username:');
+            if (username) {
+                document.getElementById('username').value = username;
+                addMessage('server', 'System', `✓ Registration successful for ${username}! You can now login.`);
+            }
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentUser) return;
+            
+            // Add user message
+            addMessage('own', currentUser, message);
+            
+            // Clear input
+            input.value = '';
+            
+            // Simulate responses
+            if (message.toLowerCase().includes('hello')) {
+                setTimeout(() => {
+                    addMessage('other', 'Alice', `Hello ${currentUser}! Nice to meet you!`);
+                }, 1500);
+            }
+            
+            if (message.toLowerCase().includes('encryption')) {
+                setTimeout(() => {
+                    addMessage('other', 'Bob', 'The AES-256 encryption is really impressive! 🔒');
+                }, 2000);
+            }
+            
+            if (message.toLowerCase().includes('project')) {
+                setTimeout(() => {
+                    addMessage('other', 'Alice', 'This is a great demonstration of secure messaging!');
+                }, 1800);
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Add some initial system messages
+        setTimeout(() => {
+            addMessage('server', 'System', '💡 Tip: This demo simulates a real encrypted chat environment');
+        }, 3000);
+        
+        setTimeout(() => {
+            addMessage('server', 'System', '🔐 All messages are encrypted with AES-256 in the actual implementation');
+        }, 5000);
+    </script>
+</body>
+</html>

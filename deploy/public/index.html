@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Business Chat - Web Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 1200px;
+            height: 80vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo::before {
+            content: "🔒";
+            font-size: 30px;
+        }
+
+        .features {
+            margin: 30px 0;
+            flex-grow: 1;
+        }
+
+        .features h3 {
+            margin-bottom: 15px;
+            color: #3498db;
+        }
+
+        .features ul {
+            list-style: none;
+        }
+
+        .features li {
+            padding: 8px 0;
+            border-bottom: 1px solid #34495e;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .features li::before {
+            content: "✓";
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        .auth-section {
+            background: #34495e;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .auth-section h3 {
+            margin-bottom: 15px;
+            color: #3498db;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #2c3e50;
+            color: white;
+            border: 1px solid #34495e;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #2ecc71;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #27ae60;
+        }
+
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #3498db;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 70%;
+        }
+
+        .message.own {
+            background: #3498db;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.other {
+            background: white;
+            border: 1px solid #dee2e6;
+        }
+
+        .message.server {
+            background: #f39c12;
+            color: white;
+            text-align: center;
+            margin: 0 auto;
+        }
+
+        .message-info {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .chat-input {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .demo-mode {
+            background: #e74c3c;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: 100vh;
+            }
+            
+            .sidebar {
+                width: 100%;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="logo">Secure Business Chat</div>
+            <p style="opacity: 0.8; margin-bottom: 20px;">Real-time encrypted messaging system</p>
+            
+            <div class="features">
+                <h3>🚀 Features</h3>
+                <ul>
+                    <li>AES-256 Encryption</li>
+                    <li>Real-time Messaging</li>
+                    <li>User Authentication</li>
+                    <li>Multi-user Support</li>
+                    <li>Message History</li>
+                    <li>Secure Database Storage</li>
+                </ul>
+            </div>
+            
+            <div class="demo-mode">
+                🎯 Demo Mode - No Server Required
+            </div>
+            
+            <div class="auth-section">
+                <h3>👤 Quick Demo Login</h3>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="Enter username" value="demo">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="Enter password" value="demo">
+                </div>
+                <button class="btn btn-primary" onclick="startDemo()">Start Demo</button>
+                <button class="btn btn-secondary" onclick="registerDemo()">Register New User</button>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header">
+                <h2>🔒 Secure Business Chat Demo</h2>
+                <p>Experience real-time encrypted messaging</p>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message server">
+                    <div class="message-info">System</div>
+                    <div>Welcome to Secure Business Chat! Please login to start chatting.</div>
+                </div>
+            </div>
+            
+            <div class="chat-input hidden" id="chatInput">
+                <input type="text" id="messageInput" placeholder="Type your message here..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let messageHistory = [];
+        
+        function addMessage(type, username, message) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const time = new Date().toLocaleTimeString();
+            let content = '';
+            
+            if (type === 'server') {
+                content = `<div class="message-info">System • ${time}</div><div>${message}</div>`;
+            } else {
+                const isOwn = type === 'own';
+                content = `<div class="message-info">${username} • ${time}</div><div>${message}</div>`;
+            }
+            
+            messageDiv.innerHTML = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Store in history
+            messageHistory.push({ type, username, message, time });
+        }
+        
+        function startDemo() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+            
+            currentUser = username;
+            
+            // Show chat interface
+            document.getElementById('chatInput').classList.remove('hidden');
+            
+            // Add welcome message
+            addMessage('server', 'System', `✓ Authentication successful! Welcome ${username}!`);
+            addMessage('server', 'System', 'You are now connected to the secure chat server.');
+            
+            // Simulate other users
+            setTimeout(() => {
+                addMessage('other', 'Alice', 'Hey everyone! 👋');
+            }, 2000);
+            
+            setTimeout(() => {
+                addMessage('other', 'Bob', 'Hi Alice! How are you?');
+            }, 4000);
+            
+            setTimeout(() => {
+                addMessage('server', 'System', `${username} joined the chat!`);
+            }, 1000);
+        }
+        
+        function registerDemo() {
+            const username = prompt('Enter new username:');
+            if (username) {
+                document.getElementById('username').value = username;
+                addMessage('server', 'System', `✓ Registration successful for ${username}! You can now login.`);
+            }
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentUser) return;
+            
+            // Add user message
+            addMessage('own', currentUser, message);
+            
+            // Clear input
+            input.value = '';
+            
+            // Simulate responses
+            if (message.toLowerCase().includes('hello')) {
+                setTimeout(() => {
+                    addMessage('other', 'Alice', `Hello ${currentUser}! Nice to meet you!`);
+                }, 1500);
+            }
+            
+            if (message.toLowerCase().includes('encryption')) {
+                setTimeout(() => {
+                    addMessage('other', 'Bob', 'The AES-256 encryption is really impressive! 🔒');
+                }, 2000);
+            }
+            
+            if (message.toLowerCase().includes('project')) {
+                setTimeout(() => {
+                    addMessage('other', 'Alice', 'This is a great demonstration of secure messaging!');
+                }, 1800);
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Add some initial system messages
+        setTimeout(() => {
+            addMessage('server', 'System', '💡 Tip: This demo simulates a real encrypted chat environment');
+        }, 3000);
+        
+        setTimeout(() => {
+            addMessage('server', 'System', '🔐 All messages are encrypted with AES-256 in the actual implementation');
+        }, 5000);
+    </script>
+</body>
+</html>

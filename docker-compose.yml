@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  chat-server:
+    build: .
+    ports:
+      - "5555:5555"
+    environment:
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-SecureBusinessChat2024DemoKey!}
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5555
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    
+  # Optional: Add a web client for browser access
+  web-client:
+    build:
+      context: ./web-client
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - chat-server
+    restart: unless-stopped

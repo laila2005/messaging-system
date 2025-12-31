@@ -1,0 +1,12 @@
+{
+  "name": "secure-business-chat",
+  "version": "1.0.0",
+  "description": "Secure Business Chat System - Web Demo",
+  "scripts": {
+    "build": "echo 'Static site - no build needed'",
+    "start": "python -m http.server 8000 --directory ../web-client"
+  },
+  "keywords": ["chat", "encryption", "security", "python"],
+  "author": "laila mohamed",
+  "license": "MIT"
+}
