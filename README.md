@@ -431,7 +431,7 @@ This is an educational project demonstrating secure chat implementation. For pro
 
 ---
 ## Authors:
-laila mohamed
-jana Ahmed
+- Laila mohamed
+- Jana Ahmed
 ---
 *Last updated: 2025*
