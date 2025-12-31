@@ -1,6 +1,6 @@
 # 🔒 Secure Business Chat System
 
-Real-time encrypted chat application with user authentication. Features AES-256 encryption, multi-threaded server, and both CLI and GUI clients.
+A secure, real-time messaging system built with Python featuring AES-256 encryption, multi-threaded TCP server, SQLite database, and both command-line and graphical user interfaces.
 
 **Technologies:** Python 3.7+ | TCP Sockets | SQLite | AES-256 | Tkinter
 
