@@ -417,23 +417,6 @@ CREATE TABLE messages (
 
 Contributions are welcome! Please feel free to submit pull requests or open issues.
 
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **PyCryptodome**: For excellent encryption library
-- **Python Community**: For comprehensive documentation
-- **SQLite**: For lightweight database solution
-
-## 📞 Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check the troubleshooting section above
-- Review the technical documentation
-
 ## ⚠️ Security Notice
 
 This is an educational project demonstrating secure chat implementation. For production use:
@@ -447,7 +430,8 @@ This is an educational project demonstrating secure chat implementation. For pro
 7. Follow OWASP guidelines
 
 ---
-
-**Built with ❤️ using Python**
-
-*Last updated: 2024*
+## Authors:
+laila mohamed
+jana Ahmed
+---
+*Last updated: 2025*
