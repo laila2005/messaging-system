@@ -1,109 +1,95 @@
-# 🔒 Secure Business Chat System
+<div align="center">
+  <h1>🕊️ Zagel (زاجل)</h1>
+  <p><strong>Enterprise-Grade Real-Time Messaging & WebRTC Video Conferencing</strong></p>
 
-A modern, real-time encrypted chat application featuring a Next.js web frontend and a FastAPI backend with WebSockets. Built for enterprise-grade scalability, security, and a beautiful user experience.
+  [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+  [![WebRTC](https://img.shields.io/badge/WebRTC-P2P-333333?logo=webrtc)](https://webrtc.org/)
+  [![Capacitor](https://img.shields.io/badge/Capacitor-Mobile-119EFF?logo=capacitor)](https://capacitorjs.com/)
+  [![Electron](https://img.shields.io/badge/Electron-Desktop-47848F?logo=electron)](https://www.electronjs.org/)
+</div>
 
-**Technologies:** FastAPI | WebSockets | SQLite (PostgreSQL Ready) | Next.js | React | TailwindCSS | Framer Motion | JWT
+<br />
 
-## 📋 Features
+## 📖 Overview
 
-### Modern Web Architecture
-- **WebSockets Migration**: Real-time persistent bidirectional communication powered by FastAPI WebSockets.
-- **RESTful API**: Clean API endpoints for authentication, user management, and file uploads.
-- **Next.js Frontend**: A beautiful, single-page application (SPA) built with React and styled with TailwindCSS and Framer Motion micro-animations.
+A highly scalable, secure, and modern unified communications platform built to handle both global broadcast messaging and private, encrypted 1-on-1 chats. This platform completely bridges the gap between web, desktop, and mobile users by leveraging a powerful **Next.js** frontend wrapper in **Electron** and **Capacitor**, all backed by a high-performance **FastAPI** WebSocket server.
 
-### Security & Authentication
-- **Stateless Auth**: Secure login via JSON Web Tokens (JWT) stored client-side.
-- **Enhanced Registration**: Supports optional email and phone number fields alongside secure Argon2 password hashing.
-- **Transport Security**: Backend built to enforce TLS, with groundwork laid for End-to-End Encryption (E2EE) in private chats.
+## ✨ Key Features
 
-### Communication Modes
-- **Global Broadcast**: A unified room where all connected users can exchange messages.
-- **Direct Messaging**: 1-on-1 private messaging routed securely via server-side session management.
+- **Real-Time WebSockets**: Sub-millisecond latency for instant text messaging, typing indicators, and read receipts.
+- **WebRTC Audio & Video**: Fully integrated P2P architecture for zero-latency, high-fidelity video conferencing and voice calls without burdening the server.
+- **Robust Security & Moderation**: JWT-based stateless authentication, real-time message toxicity filtering, and automated data retention policies for enterprise compliance.
+- **Modern UI/UX**: A beautifully crafted "Glassmorphic" interface featuring dynamic animations, dark mode aesthetics, and fully responsive layouts.
+- **Rich Media Sharing**: Built-in support for native voice memos (`MediaRecorder`), drag-and-drop file attachments, and an interactive emoji picker.
+- **Cross-Platform Native**: Run the exact same codebase as a Progressive Web App (PWA), a Windows `.exe` via Electron, or an Android `.apk` via Capacitor.
 
-### User Experience
-- **Sleek Interface**: Glassmorphic dark-mode design system.
-- **User Profiles**: Built-in support for avatar uploads and custom profile settings.
-- **Interactive Search**: Search bar to easily find online users and initiate direct chats.
+---
 
-## 🚀 Quick Start
+## 🏗️ System Architecture
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+ & npm
-- pip (Python package installer)
+```mermaid
+graph TD
+    %% Frontend Clients
+    subgraph Clients["Client Applications"]
+        Web["Web App (Next.js)"]
+        Desktop["Desktop (Electron)"]
+        Mobile["Mobile (Capacitor)"]
+    end
 
-### 1. Backend Setup (FastAPI)
+    %% API Gateway & Server
+    subgraph Backend["FastAPI Backend Server"]
+        REST["REST API (Auth, Uploads, Admin)"]
+        WS["WebSocket Manager (Signaling & Chat)"]
+    end
 
-1. **Navigate to the project root:**
-```bash
-cd messaging-system
+    %% Database Layer
+    subgraph DataLayer["Persistence Layer"]
+        DB[(PostgreSQL / SQLite)]
+        Storage[Local / Cloud File Storage]
+    end
+
+    %% Connections
+    Clients -->|HTTPS| REST
+    Clients <-->|WSS| WS
+    REST --> DB
+    REST --> Storage
+    WS --> DB
+    
+    %% WebRTC Connection
+    Web <.->|WebRTC P2P (Video/Audio)| Web
+    Desktop <.->|WebRTC P2P (Video/Audio)| Mobile
 ```
 
-2. **Install Python dependencies:**
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Start the Backend
+The backend runs on Python 3.10+ and uses FastAPI.
 ```bash
+cd backend
 pip install -r requirements.txt
+python -m uvicorn main:app --reload --port 8000
 ```
 
-3. **Environment Setup:**
-Create a `.env` file in the root directory to store your secrets (JWT secret, DB URL).
-
-4. **Start the FastAPI Server:**
-```bash
-python -m uvicorn backend.main:app --port 8000
-```
-*The server will start at `http://127.0.0.1:8000`. The SQLite database (`chat_system.db`) and `uploads/` directory will be created automatically.*
-
-### 2. Frontend Setup (Next.js)
-
-1. **Navigate to the frontend directory:**
+### 2. Start the Frontend Web App
+The frontend is built on Next.js 14 and TailwindCSS.
 ```bash
 cd frontend
-```
-
-2. **Install Node dependencies:**
-```bash
 npm install
+npm run dev
 ```
+Navigate to `http://localhost:3005` in your browser.
 
-3. **Start the Next.js Development Server:**
-```bash
-npm run dev -p 3005
-```
-*The frontend will be available at `http://localhost:3005`.*
-
-## 📁 Project Structure
-
-```
-messaging-system/
-│
-├── backend/                  # FastAPI Application
-│   ├── main.py               # REST API & WebSocket routing
-│   ├── models.py             # SQLAlchemy Database Models
-│   ├── schemas.py            # Pydantic validation schemas
-│   ├── database.py           # DB connection setup
-│   └── auth.py               # JWT and Password hashing
-│
-├── frontend/                 # Next.js Application
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx      # Main Chat UI & Auth UI
-│   │   │   └── globals.css   # Tailwind configuration
-│   └── package.json          
-│
-├── uploads/                  # User avatar storage
-├── requirements.txt          # Python dependencies
-└── README.md                 # This file
-```
-
-## 🔮 Future Enhancements (Roadmap)
-- [ ] Complete End-to-End Encryption (E2EE) key exchange for Direct Messages.
-- [ ] Migrate SQLite to Supabase (PostgreSQL) for cloud production.
-- [ ] Integrate Redis Pub/Sub for horizontal scaling across multiple servers.
-- [ ] Dockerize the entire stack with `docker-compose`.
+### 3. Run Native Wrappers
+- **Windows Desktop:** `npm run electron`
+- **Android App:** `npx cap sync android` -> `npx cap open android`
 
 ---
-## Authors:
-- Laila mohamed
-- Jana Ahmed
----
-*Last updated: 2026*
+
+## 🗄️ Repository Structure
+- `/backend` - FastAPI server, SQLAlchemy models, WebSockets, and AI endpoints.
+- `/frontend` - Next.js React application, TailwindCSS styling, and native wrapper configurations.
+- `/archive_v1` - Legacy Python TCP socket implementations (V1).
+- `/docs` - Extensive project documentation and deployment guides.

@@ -14,6 +14,7 @@ class User(Base):
     public_key = Column(Text, nullable=True) # For E2EE Phase 3
     avatar_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
 
     # Relationships
     messages_sent = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
@@ -27,6 +28,7 @@ class Message(Base):
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     recipient_id = Column(Integer, ForeignKey("users.id"), nullable=True) # NULL means broadcast message
     content = Column(Text, nullable=False) # Plaintext for broadcast, Encrypted for E2E
+    attachment_url = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String, default="sent") # sent, delivered, read
 

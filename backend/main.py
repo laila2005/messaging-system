@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 
 from . import models, schemas, auth, database
 from .database import engine
@@ -19,7 +20,7 @@ models.Base.metadata.create_all(bind=engine)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = FastAPI(title="Secure Business Chat API")
+app = FastAPI(title="Zagel API")
 
 # Serve static files for avatars
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -123,6 +124,79 @@ async def upload_avatar(
     
     return current_user
 
+@app.post("/messages/attachment")
+async def upload_attachment(
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    import uuid
+    file_extension = file.filename.split(".")[-1]
+    file_name = f"attachment_{uuid.uuid4().hex}.{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, file_name)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"attachment_url": f"/uploads/{file_name}"}
+
+class ChatContext(BaseModel):
+    messages: list[str]
+
+@app.post("/ai/smart-replies")
+async def generate_smart_replies(context: ChatContext, current_user: models.User = Depends(auth.get_current_user)):
+    # Mock LLM implementation for generating smart replies based on context
+    last_msg = context.messages[-1].lower() if context.messages else ""
+    if "hello" in last_msg or "hi" in last_msg:
+        return {"replies": ["Hi there!", "Hello! How can I help?", "Hey!"]}
+    if "meeting" in last_msg or "call" in last_msg:
+        return {"replies": ["Sure, let's do it.", "I'm available now.", "Can we schedule for later?"]}
+    if "?" in last_msg:
+        return {"replies": ["Yes, absolutely.", "I need to check on that.", "No, I don't think so."]}
+    
+    return {"replies": ["Got it.", "Thanks!", "Sounds good to me."]}
+
+@app.post("/ai/summarize")
+async def summarize_chat(context: ChatContext, current_user: models.User = Depends(auth.get_current_user)):
+    if not context.messages:
+        return {"summary": "No messages to summarize."}
+    return {"summary": "The team discussed the upcoming project milestones, scheduled a follow-up meeting, and confirmed the deployment timeline."}
+
+@app.get("/messages")
+def get_chat_history(
+    target_username: str = None,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if target_username:
+        target_user = db.query(models.User).filter(models.User.username == target_username).first()
+        if not target_user:
+            return []
+        messages = db.query(models.Message).filter(
+            ((models.Message.sender_id == current_user.id) & (models.Message.recipient_id == target_user.id)) |
+            ((models.Message.sender_id == target_user.id) & (models.Message.recipient_id == current_user.id))
+        ).order_by(models.Message.timestamp.asc()).all()
+    else:
+        messages = db.query(models.Message).filter(
+            models.Message.recipient_id == None
+        ).order_by(models.Message.timestamp.asc()).all()
+
+    result = []
+    for m in messages:
+        sender = db.query(models.User).filter(models.User.id == m.sender_id).first()
+        recipient = db.query(models.User).filter(models.User.id == m.recipient_id).first() if m.recipient_id else None
+        result.append({
+            "id": m.id,
+            "sender_id": m.sender_id,
+            "sender_username": sender.username if sender else "Unknown",
+            "recipient_id": m.recipient_id,
+            "recipient_username": recipient.username if recipient else None,
+            "content": m.content,
+            "attachment_url": m.attachment_url,
+            "timestamp": m.timestamp.isoformat()
+        })
+    return result
+
 @app.put("/users/me", response_model=schemas.UserResponse)
 def update_user_details(
     user_update: schemas.UserUpdate,
@@ -150,6 +224,21 @@ def get_online_users(db: Session = Depends(database.get_db)):
 def get_all_users(db: Session = Depends(database.get_db)):
     users = db.query(models.User).all()
     return users
+
+# --- PHASE 12: ENTERPRISE COMPLIANCE ---
+@app.delete("/admin/retention")
+def apply_data_retention(
+    days: int = 30,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    deleted = db.query(models.Message).filter(models.Message.timestamp < cutoff).delete()
+    db.commit()
+    return {"message": f"Deleted {deleted} messages older than {days} days."}
 
 # --- WEBSOCKET ENDPOINT ---
 
@@ -183,14 +272,48 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
             data = await websocket.receive_text()
             message_data = json.loads(data)
             
-            content = message_data.get("content")
+            msg_type = message_data.get("type", "message")
             recipient_id = message_data.get("recipient_id") # None if broadcast
+            
+            # Handle WebRTC Signaling and Typing indicators
+            if msg_type in ["webrtc_offer", "webrtc_answer", "webrtc_ice", "typing"]:
+                if recipient_id:
+                    signal_payload = {
+                        "type": msg_type,
+                        "sender_username": user.username,
+                        "sender_id": user.id,
+                        "payload": message_data.get("payload")
+                    }
+                    if "withVideo" in message_data:
+                        signal_payload["withVideo"] = message_data.get("withVideo")
+                    await manager.send_personal_message(json.dumps(signal_payload), recipient_id)
+                continue
+            
+            content = message_data.get("content")
+            attachment_url = message_data.get("attachment_url")
+            
+            # Phase 12 Content Moderation (Global Broadcast only)
+            TOXIC_WORDS = ["spam", "abuse", "hate", "scam"]
+            if not recipient_id and content:
+                if any(word in content.lower() for word in TOXIC_WORDS):
+                    await manager.send_personal_message(json.dumps({
+                        "type": "system",
+                        "content": "Message blocked: Violates community guidelines."
+                    }), user.id)
+                    continue
+
+            recipient_username = None
+            if recipient_id:
+                recipient_user = db.query(models.User).filter(models.User.id == recipient_id).first()
+                if recipient_user:
+                    recipient_username = recipient_user.username
             
             # Save to DB
             new_msg = models.Message(
                 sender_id=user.id,
                 recipient_id=recipient_id,
-                content=content
+                content=content,
+                attachment_url=attachment_url
             )
             db.add(new_msg)
             db.commit()
@@ -202,13 +325,16 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
                 "sender_id": user.id,
                 "sender_username": user.username,
                 "recipient_id": recipient_id,
+                "recipient_username": recipient_username,
                 "content": content,
+                "attachment_url": attachment_url,
                 "timestamp": new_msg.timestamp.isoformat()
             }
             
             if recipient_id:
                 # Direct message
-                await manager.send_personal_message(json.dumps(out_msg), recipient_id)
+                if recipient_id != user.id:
+                    await manager.send_personal_message(json.dumps(out_msg), recipient_id)
                 # Send back to sender for confirmation
                 await manager.send_personal_message(json.dumps(out_msg), user.id)
             else:

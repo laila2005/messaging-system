@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Lock, Globe, User as UserIcon, LogOut, Shield, Search, UserPlus } from "lucide-react";
+import { Lock, Globe, LogOut, Shield, Search, Smile, Paperclip, Mic, ArrowLeft, Phone, Video, PhoneOff, VideoOff, MicOff, PhoneCall, Sparkles } from "lucide-react";
 
 export default function ChatApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -14,24 +14,53 @@ export default function ChatApp() {
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMessage, setInputMessage] = useState("");
-  const [chatMode, setChatMode] = useState<"broadcast" | "direct">("broadcast");
+  const [chatMode, setChatMode] = useState<"none" | "broadcast" | "direct">("none");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [systemAlert, setSystemAlert] = useState<string | null>(null);
   
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [smartReplies, setSmartReplies] = useState<string[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingSentRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Emojis & Recording
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojis = ["👍", "❤️", "😂", "🔥", "🎉", "😮", "😢", "👏", "🙌", "🤔"];
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   // Profile settings state
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // WebRTC Call State
+  const [isCalling, setIsCalling] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<any>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
   
   const ws = useRef<WebSocket | null>(null);
+  const pc = useRef<RTCPeerConnection | null>(null);
+  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch all users periodically or on load
+  const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
   const fetchOnlineUsers = async () => {
     try {
       const res = await fetch("http://localhost:8000/users");
@@ -46,60 +75,117 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (isLoggedIn && token) {
-      // Connect WebSocket
       const socket = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
       
-      socket.onopen = () => {
-        console.log("WebSocket connected");
-        fetchOnlineUsers();
-      };
+      socket.onopen = () => fetchOnlineUsers();
       
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "system") {
-          fetchOnlineUsers(); // Refresh users list when someone joins/leaves
-          setMessages(prev => [...prev, {
-            id: Date.now(),
-            sender: "System",
-            content: data.content,
-            type: "system",
-            timestamp: new Date().toLocaleTimeString()
-          }]);
+          fetchOnlineUsers();
+          setSystemAlert(data.content);
+          setTimeout(() => setSystemAlert(null), 5000);
         } else if (data.type === "message") {
-          setMessages(prev => [...prev, {
-            id: data.id,
-            sender: data.sender_username,
-            content: data.content,
-            type: data.recipient_id ? "direct" : "broadcast",
-            recipient: data.recipient_id ? (data.sender_username === username ? selectedUser : data.sender_username) : null,
-            timestamp: new Date(data.timestamp).toLocaleTimeString()
-          }]);
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.id)) return prev;
+            return [...prev, {
+              id: data.id, sender: data.sender_username, content: data.content,
+              type: data.recipient_id ? "direct" : "broadcast", recipient: data.recipient_username,
+              attachment_url: data.attachment_url,
+              timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            }];
+          });
+        } else if (data.type === "typing") {
+          if (chatMode === "direct" && selectedUser === data.sender_username) {
+            setTypingUser(data.sender_username);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+          }
+        } else if (data.type === "webrtc_offer") {
+          setIncomingCall({ sender: data.sender_username, senderId: data.sender_id, offer: data.payload, withVideo: data.withVideo });
+        } else if (data.type === "webrtc_answer") {
+          if (pc.current) {
+            pc.current.setRemoteDescription(new RTCSessionDescription(data.payload)).then(() => {
+              while (iceCandidatesQueue.current.length > 0) {
+                pc.current?.addIceCandidate(new RTCIceCandidate(iceCandidatesQueue.current.shift()!));
+              }
+            });
+          }
+        } else if (data.type === "webrtc_ice") {
+          if (pc.current && pc.current.remoteDescription) {
+            pc.current.addIceCandidate(new RTCIceCandidate(data.payload));
+          } else {
+            iceCandidatesQueue.current.push(data.payload);
+          }
         }
       };
       
       socket.onclose = () => {
-        console.log("WebSocket disconnected");
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          sender: "System",
-          content: "Connection to server lost.",
-          type: "system",
-          timestamp: new Date().toLocaleTimeString()
-        }]);
+        setSystemAlert("Connection to server lost. Reconnecting...");
       };
       
       ws.current = socket;
-      
-      return () => {
-        socket.close();
-      };
+      return () => socket.close();
     }
   }, [isLoggedIn, token]);
 
-  // Filter users based on search
-  const filteredUsers = onlineUsers.filter(user => 
-    user.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const fetchChatHistory = async (targetUser: string | null) => {
+    if (!token) return;
+    try {
+      let url = "http://localhost:8000/messages";
+      if (targetUser) url += `?target_username=${encodeURIComponent(targetUser)}`;
+      const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+      if (res.ok) {
+        const history = await res.json();
+        const formatted = history.map((data: any) => ({
+          id: data.id, sender: data.sender_username, content: data.content,
+          type: data.recipient_id ? "direct" : "broadcast", recipient: data.recipient_username,
+          attachment_url: data.attachment_url,
+          timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        }));
+        setMessages(formatted);
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  useEffect(() => {
+    if (chatMode === "broadcast") fetchChatHistory(null);
+    else if (chatMode === "direct" && selectedUser) fetchChatHistory(selectedUser);
+  }, [chatMode, selectedUser, token]);
+
+  const fetchSmartReplies = async (contextMsgs: any[]) => {
+    if (!token) return;
+    const msgsContent = contextMsgs.map(m => m.content).filter(Boolean).slice(-5);
+    try {
+      const res = await fetch("http://localhost:8000/ai/smart-replies", {
+         method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+         body: JSON.stringify({ messages: msgsContent })
+      });
+      if (res.ok) {
+         const data = await res.json();
+         setSmartReplies(data.replies);
+      }
+    } catch(e) {}
+  };
+
+  useEffect(() => {
+    const activeMsgs = messages.filter(m => (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser)));
+    if (activeMsgs.length > 0) {
+      const lastMsg = activeMsgs[activeMsgs.length - 1];
+      if (lastMsg.sender === selectedUser) fetchSmartReplies(activeMsgs);
+      else setSmartReplies([]);
+    } else { setSmartReplies([]); }
+  }, [messages, chatMode, selectedUser]);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+  }, [localStream, isCalling]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream, isCalling]);
+
+  const filteredUsers = onlineUsers.filter(user => user.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const startNewChat = () => {
     if (searchQuery.trim() && !onlineUsers.includes(searchQuery.toLowerCase())) {
@@ -110,268 +196,286 @@ export default function ChatApp() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters");
+  const getUserId = async (uname: string) => {
+    const res = await fetch("http://localhost:8000/users");
+    const users = await res.json();
+    return users.find((u: any) => u.username === uname)?.id;
+  };
+
+  const startCall = async (withVideo: boolean) => {
+    if (!selectedUser) return;
+    const targetId = await getUserId(selectedUser);
+    if (!targetId) return;
+
+    setIsCalling(true);
+    const stream = await navigator.mediaDevices.getUserMedia({ video: withVideo, audio: true });
+    setLocalStream(stream);
+
+    const peer = new RTCPeerConnection(rtcConfig);
+    pc.current = peer;
+
+    stream.getTracks().forEach(track => peer.addTrack(track, stream));
+    peer.ontrack = (event) => setRemoteStream(event.streams[0]);
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate && ws.current) {
+        ws.current.send(JSON.stringify({ type: "webrtc_ice", recipient_id: targetId, payload: event.candidate }));
+      }
+    };
+
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    ws.current?.send(JSON.stringify({ type: "webrtc_offer", recipient_id: targetId, payload: offer, withVideo: withVideo }));
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall) return;
+    setIsCalling(true);
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ video: incomingCall.withVideo ?? true, audio: true });
+    setLocalStream(stream);
+
+    const peer = new RTCPeerConnection(rtcConfig);
+    pc.current = peer;
+
+    stream.getTracks().forEach(track => peer.addTrack(track, stream));
+    peer.ontrack = (event) => setRemoteStream(event.streams[0]);
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate && ws.current) {
+        ws.current.send(JSON.stringify({ type: "webrtc_ice", recipient_id: incomingCall.senderId, payload: event.candidate }));
+      }
+    };
+
+    await peer.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+    while (iceCandidatesQueue.current.length > 0) {
+      peer.addIceCandidate(new RTCIceCandidate(iceCandidatesQueue.current.shift()!));
+    }
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+
+    ws.current?.send(JSON.stringify({ type: "webrtc_answer", recipient_id: incomingCall.senderId, payload: answer }));
+    setIncomingCall(null);
+  };
+
+  const endCall = () => {
+    if (pc.current) { pc.current.close(); pc.current = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); setLocalStream(null); }
+    setRemoteStream(null);
+    setIsCalling(false);
+    setIncomingCall(null);
+    iceCandidatesQueue.current = [];
+  };
+
+  const toggleAudio = () => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(t => t.enabled = !t.enabled);
+      setIsAudioMuted(!isAudioMuted);
+    }
+  };
+
+  const toggleVideo = () => {
+    if (localStream) {
+      localStream.getVideoTracks().forEach(t => t.enabled = !t.enabled);
+      setIsVideoMuted(!isVideoMuted);
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
       return;
     }
-    setError("");
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], "voice_message.webm", { type: 'audio/webm' });
+        setAttachmentFile(audioFile);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (e) {
+      console.error("Microphone access denied", e);
+      setSystemAlert("Microphone permission denied.");
+      setTimeout(() => setSystemAlert(null), 3000);
+    }
+  };
 
+  const handleInput = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputMessage(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+    
+    if (chatMode === "direct" && selectedUser && ws.current) {
+      const now = Date.now();
+      if (now - lastTypingSentRef.current > 2000) {
+        lastTypingSentRef.current = now;
+        const targetId = await getUserId(selectedUser);
+        ws.current.send(JSON.stringify({ type: "typing", recipient_id: targetId }));
+      }
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username.length < 3) return setError("Username must be at least 3 characters");
+    setError("");
     try {
       const regRes = await fetch("http://localhost:8000/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          username, 
-          password,
-          email: email || undefined,
-          phone_number: phoneNumber || undefined
-        })
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, email: email || undefined, phone_number: phoneNumber || undefined })
       });
-      
-      if (!regRes.ok) {
-        setError("Invalid credentials or username already taken.");
-        return;
-      }
-      
-      // Auto-login after register
+      if (!regRes.ok) return setError("Invalid credentials or username already taken.");
       handleLogin(e);
-    } catch (err) {
-      setError("Cannot connect to server.");
-    }
+    } catch (err) { setError("Cannot connect to server."); }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters");
-      return;
-    }
+    if (username.length < 3) return setError("Username must be at least 3 characters");
     setError("");
-
     try {
-      // Try logging in
       const formData = new URLSearchParams();
       formData.append("username", username);
       formData.append("password", password);
-      
-      let res = await fetch("http://localhost:8000/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData
-      });
-
-      if (!res.ok) {
-        setError("Invalid username or password.");
-        return;
-      }
-
+      let res = await fetch("http://localhost:8000/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
+      if (!res.ok) return setError("Invalid username or password.");
       const data = await res.json();
       setToken(data.access_token);
-      
-      // Get user info to get ID
-      const userRes = await fetch("http://localhost:8000/users/me", {
-        headers: { "Authorization": `Bearer ${data.access_token}` }
-      });
+      const userRes = await fetch("http://localhost:8000/users/me", { headers: { "Authorization": `Bearer ${data.access_token}` } });
       const userData = await userRes.json();
-      setUserId(userData.id);
-      setCurrentUser(userData);
-      setProfileEmail(userData.email || "");
-      setProfilePhone(userData.phone_number || "");
-
+      setUserId(userData.id); setCurrentUser(userData); setProfileEmail(userData.email || ""); setProfilePhone(userData.phone_number || "");
       setIsLoggedIn(true);
-      setMessages([
-        { id: 1, sender: "System", content: "Welcome to Secure Business Chat! 🔒", type: "system", timestamp: new Date().toLocaleTimeString() }
-      ]);
-    } catch (err) {
-      setError("Cannot connect to server.");
-    }
+    } catch (err) { setError("Cannot connect to server."); }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-
+    if ((!inputMessage.trim() && !attachmentFile) || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    
     let recipient_id = null;
     if (chatMode === "direct" && selectedUser) {
-      // Find recipient ID by fetching all users and matching username
-      const res = await fetch("http://localhost:8000/users");
-      const users = await res.json();
-      const target = users.find((u: any) => u.username === selectedUser);
-      if (target) recipient_id = target.id;
+      recipient_id = await getUserId(selectedUser);
     }
 
-    const messagePayload = {
-      content: inputMessage,
-      recipient_id: recipient_id
-    };
-
-    ws.current.send(JSON.stringify(messagePayload));
-    
-    // Optimistically add the message to the UI if it's a direct message
-    // (Broadcast messages are echoed back by the server)
-    if (chatMode === "direct") {
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        sender: username,
-        content: inputMessage,
-        type: "direct",
-        recipient: selectedUser,
-        timestamp: new Date().toLocaleTimeString()
-      }]);
+    let attachment_url = null;
+    if (attachmentFile && token) {
+      const formData = new FormData();
+      formData.append("file", attachmentFile);
+      try {
+        const uploadRes = await fetch("http://localhost:8000/messages/attachment", {
+          method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData
+        });
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          attachment_url = data.attachment_url;
+        }
+      } catch (err) { console.error(err); }
     }
-    
+
+    ws.current.send(JSON.stringify({ content: inputMessage, recipient_id: recipient_id, attachment_url: attachment_url }));
     setInputMessage("");
+    setAttachmentFile(null);
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+  };
+
+  const parseMarkdown = (text: string) => {
+    if (!text) return text;
+    let htmlText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    htmlText = htmlText.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    htmlText = htmlText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-400 underline hover:text-blue-300">$1</a>');
+    return <span dangerouslySetInnerHTML={{ __html: htmlText }} />;
+  };
+
+  const renderAttachment = (url: string) => {
+    if (!url) return null;
+    const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+    const isAudio = url.match(/\.(webm|mp3|wav|ogg)$/i);
+    if (isImage) return <img src={`http://localhost:8000${url}`} alt="attachment" className="max-w-[250px] rounded-xl mb-2 border border-white/10 shadow-md" />;
+    if (isAudio) return <audio controls src={`http://localhost:8000${url}`} className="max-w-[250px] mb-2" />;
+    return <a href={`http://localhost:8000${url}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-white/10 p-3 rounded-xl mb-2 text-sm hover:bg-white/20 transition-colors w-max"><Paperclip size={16} /> Download File</a>;
+  };
+
+  const handleSummarize = async () => {
+    if (!token) return;
+    try {
+      const msgsToSummarize = messages.filter(m => 
+        (chatMode === "broadcast" && m.type === "broadcast") || 
+        (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))
+      ).map(m => m.content).filter(Boolean);
+      
+      const res = await fetch("http://localhost:8000/ai/summarize", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: msgsToSummarize })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSystemAlert(`AI Summary: ${data.summary}`);
+        setTimeout(() => setSystemAlert(null), 8000);
+      }
+    } catch (e) { console.error(e); }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-
     try {
-      // 1. Save text details
       await fetch("http://localhost:8000/users/me", {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ email: profileEmail || null, phone_number: profilePhone || null })
       });
-
-      // 2. Upload avatar if selected
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        await fetch("http://localhost:8000/users/me/avatar", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}` },
-          body: formData
-        });
+        await fetch("http://localhost:8000/users/me/avatar", { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
       }
-
-      // 3. Refresh user data
-      const userRes = await fetch("http://localhost:8000/users/me", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const userRes = await fetch("http://localhost:8000/users/me", { headers: { "Authorization": `Bearer ${token}` } });
       const userData = await userRes.json();
       setCurrentUser(userData);
       setShowProfileModal(false);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center">
-        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-0"></div>
-        
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="z-10 w-full max-w-md p-8 rounded-2xl bg-slate-800/60 backdrop-blur-xl border border-slate-700 shadow-2xl"
-        >
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#121212]">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[#1E1E1E] w-full max-w-md p-8 rounded-3xl shadow-2xl relative overflow-hidden border border-white/5">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-primary"></div>
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 text-blue-400 mb-4">
-              <Shield size={32} />
-            </div>
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 border border-white/10 text-white mb-4 shadow-lg"><Shield size={32} /></div>
             <h1 className="text-3xl font-bold text-white mb-2">{authMode === "login" ? "Sign In" : "Create Account"}</h1>
-            <p className="text-slate-400">Enterprise-grade encrypted messaging</p>
+            <p className="text-white/50">Enterprise-grade encrypted messaging</p>
           </div>
-
           <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Username</label>
-              <input 
-                type="text" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="Enter your username"
-              />
-            </div>
-            
+            <div><label className="block text-sm font-medium text-white/70 mb-1.5">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none transition-colors" placeholder="Enter your username" /></div>
             <AnimatePresence mode="popLayout">
               {authMode === "register" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 overflow-hidden"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Email <span className="text-slate-500 font-normal">(Optional)</span></label>
-                    <input 
-                      type="email" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                      placeholder="john@example.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone <span className="text-slate-500 font-normal">(Optional)</span></label>
-                    <input 
-                      type="tel" 
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                      placeholder="+1 (555) 000-0000"
-                    />
-                  </div>
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
+                  <div><label className="block text-sm font-medium text-white/70 mb-1.5">Email <span className="text-white/30">(Optional)</span></label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none transition-colors" placeholder="john@example.com" /></div>
+                  <div><label className="block text-sm font-medium text-white/70 mb-1.5">Phone <span className="text-white/30">(Optional)</span></label><input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none transition-colors" placeholder="+1 (555) 000-0000" /></div>
                 </motion.div>
               )}
             </AnimatePresence>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-            
-            <AnimatePresence>
-              {error && (
-                <motion.p 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="text-red-400 text-sm text-center pt-2"
-                >
-                  {error}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <button 
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-all shadow-lg shadow-blue-500/30 active:scale-[0.98] mt-4"
-            >
-              {authMode === "login" ? "Sign In" : "Register"}
-            </button>
-
-            <div className="text-center mt-6 border-t border-slate-700 pt-6">
-              <p className="text-slate-400 text-sm">
-                {authMode === "login" ? "Don't have an account?" : "Already have an account?"}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode(authMode === "login" ? "register" : "login");
-                  setError("");
-                }}
-                className="text-blue-400 hover:text-blue-300 font-medium mt-2 transition-colors"
-              >
-                {authMode === "login" ? "Create a new account" : "Sign in instead"}
-              </button>
-            </div>
+            <div><label className="block text-sm font-medium text-white/70 mb-1.5">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none transition-colors" placeholder="••••••••" /></div>
+            <AnimatePresence>{error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-pink-400 text-sm text-center pt-2">{error}</motion.p>}</AnimatePresence>
+            <button type="submit" className="w-full bg-gradient-primary glow-primary text-white font-medium py-3 rounded-xl active:scale-[0.98] mt-4">{authMode === "login" ? "Sign In" : "Register"}</button>
+            <div className="text-center mt-6 border-t border-white/10 pt-6"><button type="button" onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setError(""); }} className="text-white/70 hover:text-white font-medium mt-2">{authMode === "login" ? "Create a new account" : "Sign in instead"}</button></div>
           </form>
         </motion.div>
       </div>
@@ -379,260 +483,190 @@ export default function ChatApp() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-900 text-white overflow-hidden selection:bg-blue-500/30">
-      {/* Sidebar */}
-      <div className="w-72 flex flex-col bg-slate-800/40 backdrop-blur-md border-r border-slate-700/50 z-10">
-        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded-lg transition-colors -ml-2" onClick={() => setShowProfileModal(true)}>
-            {currentUser?.avatar_url ? (
-              <img src={`http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover shadow-lg shadow-blue-500/20 border border-slate-600" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center font-bold shadow-lg shadow-blue-500/20">
-                {username.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <div>
-              <h3 className="font-semibold">{username}</h3>
-              <p className="text-xs text-green-400 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-400"></span> Online
-              </p>
-            </div>
-          </div>
-          <button onClick={() => setIsLoggedIn(false)} className="p-2 text-slate-400 hover:text-white transition-colors">
-            <LogOut size={18} />
-          </button>
+    <div className="flex h-[100dvh] w-full bg-[#121212] text-white overflow-hidden selection:bg-purple-500/30">
+      
+      {/* System Alert Banner */}
+      <AnimatePresence>
+        {systemAlert && (
+          <motion.div initial={{ y: -50 }} animate={{ y: 0 }} exit={{ y: -50 }} className="absolute top-0 left-0 w-full bg-purple-600 text-white text-sm font-medium py-2 px-4 text-center z-[100] shadow-lg">
+            {systemAlert}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar: Shows full width on mobile if no chat is selected, hidden otherwise */}
+      <div className={`w-full md:w-80 h-full flex flex-col border-r border-white/5 bg-[#1E1E1E] z-40 shrink-0 ${chatMode !== "none" ? "hidden md:flex" : "flex"}`}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold tracking-wide">Active Users</h2></div>
+          <div className="relative mb-6"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" /><input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && startNewChat()} className="w-full bg-[#121212] border border-white/5 rounded-full pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-white/20 transition-colors" /></div>
         </div>
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1 custom-scrollbar">
+          <button onClick={() => { setChatMode("broadcast"); setSelectedUser(null); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${chatMode === "broadcast" ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 text-white/70 flex items-center justify-center"><Globe size={20} /></div><div className="flex flex-col items-start"><span className="font-semibold text-[15px]">Global Room</span><span className="text-xs text-white/40">Public Broadcast</span></div></button>
+          {filteredUsers.map(user => (
+            <button key={user} onClick={() => { setChatMode("direct"); setSelectedUser(user); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="relative"><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-lg text-white/80">{user.charAt(0).toUpperCase()}</div><span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span></div><div className="flex flex-col items-start flex-1 overflow-hidden"><span className="font-semibold text-[15px] truncate w-full text-left">{user}</span><span className="text-xs text-green-400">online</span></div></button>
+          ))}
+        </div>
+        <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); setIsLoggedIn(false); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          <div>
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Channels</h4>
-            <button 
-              onClick={() => { setChatMode("broadcast"); setSelectedUser(null); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${chatMode === "broadcast" ? "bg-blue-500/20 text-blue-400" : "hover:bg-slate-700/50 text-slate-300"}`}
-            >
-              <Globe size={18} />
-              <span>Global Broadcast</span>
-            </button>
+      {/* Main Area: Empty State OR Chat View */}
+      {chatMode === "none" ? (
+        <div className="hidden md:flex flex-1 items-center justify-center bg-[#121212]">
+          <div className="text-center opacity-30">
+            <Lock size={64} className="mx-auto mb-6" />
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">Secure Business Chat</h2>
+            <p className="text-lg">Select a user or room to start messaging</p>
           </div>
-
-          <div>
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-              <span>Direct Messages</span>
-              <span className="bg-slate-700 text-xs px-2 py-0.5 rounded-full">{onlineUsers.length}</span>
-            </h4>
-            
-            {/* Search Bar */}
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input 
-                type="text" 
-                placeholder="Search users..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && startNewChat()}
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-slate-500"
-              />
+        </div>
+      ) : (
+        <div className={`flex-1 flex flex-col h-full bg-[#121212] relative z-0 ${chatMode === "none" ? "hidden" : "flex"}`}>
+          <div className="h-[88px] px-4 md:px-6 border-b border-white/5 flex items-center justify-between bg-[#1E1E1E]">
+            <div className="flex items-center gap-2 md:gap-4">
+              <button className="md:hidden w-11 h-11 flex items-center justify-center text-white/70 hover:text-white rounded-full hover:bg-white/5" onClick={() => setChatMode("none")}><ArrowLeft size={24} /></button>
+              {chatMode === "broadcast" ? (<div><h2 className="font-bold text-lg tracking-wide">Global Broadcast</h2><p className="text-xs text-white/40">Everyone can see these messages</p></div>) : (<div className="flex items-center gap-3"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-xl text-white/90">{selectedUser?.charAt(0).toUpperCase()}</div><div><h2 className="font-bold text-lg tracking-wide">{selectedUser}</h2><p className="text-xs text-purple-400 flex items-center gap-1"><Lock size={12} /> End-to-End Encrypted</p></div></div>)}
             </div>
-
-            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map(user => (
-                  <button 
-                    key={user}
-                    onClick={() => { setChatMode("direct"); setSelectedUser(user); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${chatMode === "direct" && selectedUser === user ? "bg-indigo-500/20 text-indigo-400" : "hover:bg-slate-700/50 text-slate-300"}`}
-                  >
-                    <div className="relative">
-                      <UserIcon size={18} />
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-slate-900"></span>
-                    </div>
-                    <span className="truncate">{user}</span>
-                    {chatMode === "direct" && selectedUser === user && <Lock size={12} className="ml-auto opacity-50 flex-shrink-0" />}
-                  </button>
-                ))
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-xs text-slate-500 mb-2">No users found</p>
-                  {searchQuery && (
-                    <button 
-                      onClick={startNewChat}
-                      className="text-xs flex items-center justify-center gap-1 w-full bg-slate-700/50 hover:bg-slate-700 text-blue-400 py-1.5 rounded-md transition-colors"
-                    >
-                      <UserPlus size={12} /> Message "{searchQuery}"
-                    </button>
-                  )}
+            <div className="flex items-center gap-2 text-white/40">
+              <button onClick={handleSummarize} className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/5 text-purple-400 hover:text-purple-300 transition-colors" title="Summarize Chat"><Sparkles size={20} /></button>
+              {chatMode === "direct" && (
+                <div className="flex items-center gap-1 mr-2">
+                  <button onClick={() => startCall(false)} className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors"><Phone size={20} /></button>
+                  <button onClick={() => startCall(true)} className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors"><Video size={20} /></button>
                 </div>
               )}
+              <div className="w-11 h-11 flex items-center justify-center cursor-pointer hover:bg-white/5 rounded-full hover:text-white"><Search size={20} /></div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col relative">
-        {/* Background elements */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/10 blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none"></div>
+          {/* Active Call Split View */}
+          {isCalling && (
+            <div className="h-[40%] min-h-[250px] border-b border-white/10 relative bg-black flex items-center justify-center overflow-hidden shrink-0 shadow-2xl">
+              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+              <div className="absolute bottom-4 right-4 w-28 h-40 md:w-40 md:h-56 bg-black rounded-xl overflow-hidden border border-white/20 shadow-2xl">
+                 <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
+              </div>
+              <div className="absolute top-4 right-4 flex gap-3 z-10">
+                 <button onClick={toggleAudio} className={`w-12 h-12 flex items-center justify-center rounded-full backdrop-blur-md shadow-lg transition-colors ${isAudioMuted ? 'bg-white text-black' : 'bg-black/50 text-white hover:bg-black/70'}`}>{isAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}</button>
+                 <button onClick={toggleVideo} className={`w-12 h-12 flex items-center justify-center rounded-full backdrop-blur-md shadow-lg transition-colors ${isVideoMuted ? 'bg-white text-black' : 'bg-black/50 text-white hover:bg-black/70'}`}>{isVideoMuted ? <VideoOff size={20} /> : <Video size={20} />}</button>
+                 <button onClick={endCall} className="w-12 h-12 flex items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)] hover:bg-red-600 transition-colors"><PhoneOff size={20} /></button>
+              </div>
+            </div>
+          )}
 
-        {/* Chat Header */}
-        <div className="h-16 px-6 border-b border-slate-700/50 flex items-center justify-between bg-slate-900/50 backdrop-blur-md z-10">
-          <div className="flex items-center gap-3">
-            {chatMode === "broadcast" ? (
-              <>
-                <div className="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                  <Globe size={20} />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg">Global Broadcast</h2>
-                  <p className="text-xs text-slate-400">Messages are visible to everyone</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center relative">
-                  <UserIcon size={20} />
-                  <Lock size={10} className="absolute bottom-2 right-2 text-indigo-300" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg">{selectedUser}</h2>
-                  <p className="text-xs text-indigo-400 flex items-center gap-1">
-                    <Lock size={10} /> End-to-End Encrypted
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10">
-          <AnimatePresence>
-            {messages.filter(m => 
-              m.type === "system" || 
-              (chatMode === "broadcast" && m.type === "broadcast") ||
-              (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))
-            ).map((msg) => (
-              <motion.div 
-                key={msg.id}
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className={`flex ${msg.type === "system" ? "justify-center" : msg.sender === username ? "justify-end" : "justify-start"}`}
-              >
-                {msg.type === "system" ? (
-                  <div className="bg-slate-800/80 px-4 py-1.5 rounded-full text-xs text-slate-400 border border-slate-700">
-                    {msg.content}
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
+            <AnimatePresence>
+              {messages.filter(m => (chatMode === "broadcast" && m.type === "broadcast") || (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))).map((msg) => (
+                <motion.div key={msg.id} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`flex ${msg.sender === username ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${msg.sender === username ? "flex-row-reverse" : "flex-row"}`}>
+                    <div className="flex-shrink-0 mt-auto mb-1">{msg.sender === username && currentUser?.avatar_url ? (<img src={`http://localhost:8000${currentUser.avatar_url}`} className="w-8 h-8 rounded-full border border-white/10 object-cover" />) : (<div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${msg.sender === username ? 'bg-gradient-primary' : 'bg-[#1E1E1E]'}`}>{msg.sender.charAt(0).toUpperCase()}</div>)}</div>
+                    <div className={`flex flex-col gap-1 ${msg.sender === username ? "items-end" : "items-start"}`}>
+                      <div className="flex items-baseline gap-2 mx-1">
+                        <span className="text-sm font-semibold text-white/90">{msg.sender === username ? "You" : msg.sender}</span>
+                        <span className="text-[10px] text-white/40">{msg.timestamp} {msg.sender === username && <span className="text-purple-400 ml-1 text-xs leading-none">✓✓</span>}</span>
+                      </div>
+                      <div className={`px-5 py-3.5 shadow-sm ${msg.sender === username ? "bg-gradient-primary text-white rounded-3xl rounded-tr-sm" : "bg-[#2A2A2A] text-white/90 rounded-3xl rounded-tl-sm"}`}>
+                        {renderAttachment(msg.attachment_url)}
+                        {msg.content && <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{parseMarkdown(msg.content)}</p>}
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className={`max-w-[70%] ${msg.sender === username ? "items-end" : "items-start"} flex flex-col gap-1`}>
-                    <div className="flex items-baseline gap-2 mx-1">
-                      <span className="text-xs font-medium text-slate-400">{msg.sender === username ? "You" : msg.sender}</span>
-                      <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
-                    </div>
-                    <div className={`px-4 py-2.5 rounded-2xl shadow-sm ${
-                      msg.sender === username 
-                        ? msg.type === "direct" 
-                          ? "bg-indigo-600 text-white rounded-tr-sm" 
-                          : "bg-blue-600 text-white rounded-tr-sm" 
-                        : "bg-slate-800 text-slate-100 rounded-tl-sm border border-slate-700"
-                    }`}>
-                      <p className="text-sm">{msg.content}</p>
-                    </div>
+                </motion.div>
+              ))}
+              {typingUser && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+                  <div className="bg-[#2A2A2A] px-4 py-2 rounded-3xl rounded-tl-sm text-white/50 text-sm italic shadow-sm">
+                    {typingUser} is typing...
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="p-4 md:p-6 bg-[#121212] border-t border-white/5 relative">
+            <AnimatePresence>
+              {smartReplies.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute -top-12 left-4 md:left-6 flex gap-2">
+                  {smartReplies.map((reply, idx) => (
+                    <button key={idx} onClick={() => { setInputMessage(reply); setSmartReplies([]); }} className="bg-[#1E1E1E] hover:bg-white/10 border border-white/10 px-4 py-2 rounded-full text-sm text-purple-300 font-medium shadow-lg transition-colors flex items-center gap-1">
+                      <Sparkles size={14} /> {reply}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <form onSubmit={handleSendMessage} className="relative flex items-end bg-[#1E1E1E] rounded-3xl border border-white/5 shadow-inner">
+              <textarea 
+                ref={textareaRef}
+                value={inputMessage} 
+                onChange={handleInput} 
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
+                placeholder="Type a message..." 
+                className="w-full bg-transparent py-4 pl-6 pr-40 text-[15px] text-white focus:outline-none placeholder-white/30 resize-none max-h-[120px] custom-scrollbar leading-tight"
+                rows={1}
+              />
+              <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                {attachmentFile && (
+                  <div className="absolute -top-12 right-0 bg-[#2A2A2A] px-3 py-1.5 rounded-lg text-xs text-white border border-white/10 flex items-center gap-2 shadow-lg truncate max-w-[200px]">
+                    <Paperclip size={12} /> {attachmentFile.name}
+                    <button type="button" onClick={() => setAttachmentFile(null)} className="text-white/50 hover:text-white">x</button>
                   </div>
                 )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {/* Message Input */}
-        <div className="p-4 bg-slate-900/80 backdrop-blur-md z-10 border-t border-slate-800">
-          <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-slate-800/50 border border-slate-700 p-2 rounded-2xl focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
-            <textarea 
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e);
-                }
-              }}
-              placeholder={chatMode === "broadcast" ? "Message everyone..." : `Message ${selectedUser}...`}
-              className="flex-1 bg-transparent border-none text-white placeholder-slate-400 resize-none max-h-32 min-h-[44px] py-3 px-4 focus:outline-none text-sm"
-              rows={1}
-            />
-            <button 
-              type="submit"
-              disabled={!inputMessage.trim()}
-              className={`p-3 rounded-xl transition-all flex-shrink-0 mb-0.5 ${
-                inputMessage.trim() 
-                  ? "bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-500/20" 
-                  : "bg-slate-700/50 text-slate-500"
-              }`}
-            >
-              <Send size={18} className={inputMessage.trim() ? "translate-x-0.5" : ""} />
-            </button>
-          </form>
-          <div className="text-center mt-2">
-            <span className="text-[10px] text-slate-500 flex items-center justify-center gap-1">
-              <Lock size={10} /> 
-              {chatMode === "direct" ? "Messages are end-to-end encrypted." : "Messages are secured with TLS transport encryption."}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showProfileModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowProfileModal(false)}></div>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl z-10"
-            >
-              <h2 className="text-xl font-bold mb-4">Edit Profile</h2>
-              <form onSubmit={handleSaveProfile} className="space-y-4">
-                <div className="flex justify-center mb-4">
-                  <label className="cursor-pointer group relative">
-                    {avatarPreview || currentUser?.avatar_url ? (
-                      <img src={avatarPreview || `http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500" />
-                    ) : (
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-2xl font-bold border-2 border-blue-500">
-                        {username.charAt(0).toUpperCase()}
-                      </div>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { if(e.target.files) setAttachmentFile(e.target.files[0]) }} />
+                
+                <div className="relative">
+                  <AnimatePresence>
+                    {showEmojiPicker && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }} className="absolute bottom-14 -left-16 bg-[#2A2A2A] border border-white/10 rounded-2xl p-3 shadow-2xl flex gap-2 w-max z-50">
+                        {emojis.map(emoji => (
+                          <button key={emoji} type="button" onClick={() => { setInputMessage(prev => prev + emoji); setShowEmojiPicker(false); }} className="text-xl hover:scale-125 transition-transform">{emoji}</button>
+                        ))}
+                      </motion.div>
                     )}
-                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-xs font-medium text-white">Upload</span>
-                    </div>
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setAvatarFile(file);
-                        setAvatarPreview(URL.createObjectURL(file));
-                      }
-                    }} />
-                  </label>
+                  </AnimatePresence>
+                  <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors hidden sm:flex rounded-full hover:bg-white/5"><Smile size={20} /></button>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
-                  <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone Number</label>
-                  <input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors hidden sm:flex rounded-full hover:bg-white/5"><Paperclip size={20} /></button>
+                <button type="button" onClick={toggleRecording} className={`w-11 h-11 flex items-center justify-center transition-colors hidden sm:flex rounded-full hover:bg-white/5 ${isRecording ? "text-red-500 animate-pulse bg-red-500/10" : "text-white/40 hover:text-white"}`}><Mic size={20} /></button>
+                <button type="submit" disabled={!inputMessage.trim() && !attachmentFile} className={`ml-1 px-5 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all ${(inputMessage.trim() || attachmentFile) ? "bg-gradient-primary glow-primary text-white scale-100" : "bg-white/5 text-white/30 scale-95"}`}>Send <span className={(inputMessage.trim() || attachmentFile) ? "translate-x-0.5 transition-transform" : ""}>→</span></button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-                <div className="flex justify-end gap-3 mt-6">
-                  <button type="button" onClick={() => setShowProfileModal(false)} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">Cancel</button>
-                  <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors">Save Changes</button>
-                </div>
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowProfileModal(false)}></div>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="bg-[#1E1E1E] relative rounded-3xl p-8 w-full max-w-md shadow-2xl z-10 border border-white/5">
+              <h2 className="text-2xl font-bold mb-6 text-center">Edit Profile</h2>
+              <form onSubmit={handleSaveProfile} className="space-y-5">
+                <div className="flex justify-center mb-6"><label className="cursor-pointer group relative">{avatarPreview || currentUser?.avatar_url ? (<img src={avatarPreview || `http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-[3px] border-purple-500 shadow-lg" />) : (<div className="w-24 h-24 rounded-full bg-gradient-primary flex items-center justify-center text-3xl font-bold border-[3px] border-transparent shadow-lg">{username.charAt(0).toUpperCase()}</div>)}<div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-sm font-medium text-white">Change</span></div><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }} /></label></div>
+                <div><label className="block text-sm font-medium text-white/70 mb-2">Email Address</label><input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none" /></div>
+                <div><label className="block text-sm font-medium text-white/70 mb-2">Phone Number</label><input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none" /></div>
+                <div className="flex gap-3 mt-8"><button type="button" onClick={() => setShowProfileModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-medium text-white/80 transition-colors">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-gradient-primary glow-primary active:scale-95 font-medium transition-transform">Save Changes</button></div>
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* Incoming Call Modal */}
+      <AnimatePresence>
+        {incomingCall && !isCalling && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md"></div>
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="bg-[#1E1E1E] relative rounded-3xl p-8 w-full max-w-sm shadow-2xl z-10 border border-white/10 text-center">
+              <div className="w-20 h-20 bg-gradient-primary rounded-full mx-auto mb-4 flex items-center justify-center animate-pulse shadow-[0_0_30px_rgba(236,72,153,0.5)]"><PhoneCall size={32} className="text-white" /></div>
+              <h2 className="text-2xl font-bold mb-1">{incomingCall.sender}</h2>
+              <p className="text-white/50 mb-8">Incoming {(incomingCall.withVideo ?? true) ? "video" : "audio"} call...</p>
+              <div className="flex gap-4 justify-center"><button onClick={() => { setIncomingCall(null); iceCandidatesQueue.current = []; }} className="w-14 h-14 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors border border-red-500/50"><PhoneOff size={24} /></button><button onClick={acceptCall} className="w-14 h-14 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center hover:bg-green-500 hover:text-white transition-colors border border-green-500/50"><Phone size={24} /></button></div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
