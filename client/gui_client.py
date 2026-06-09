@@ -1,4 +1,4 @@
-# clint/gui_client.py - Graphical User Interface Chat Client
+# client/gui_client.py - Graphical User Interface Chat Client
 
 import socket
 import threading
@@ -6,6 +6,11 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox, simpledialog, ttk
 import sys
 import os
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -58,7 +63,7 @@ class LoginWindow:
         
         title_label = tk.Label(
             header_frame,
-            text="🔒 Secure Business Chat",
+            text="[SECURE] Secure Business Chat",
             font=("Segoe UI", 20, "bold"),
             bg='#0f3460',
             fg='#e94560'
@@ -273,7 +278,7 @@ class ChatGUI:
         
         self.status_label = tk.Label(
             top_frame,
-            text="🔒 Secure Business Chat - Not Connected",
+            text="[SECURE] Secure Business Chat - Not Connected",
             bg="#0f3460",
             fg="#e94560",
             font=("Segoe UI", 14, "bold")
@@ -473,11 +478,11 @@ class ChatGUI:
             # Connect to server
             self.client_socket.connect((self.host, self.port))
             
-            self.display_message("✓ Connected to server with TLS encryption!", "server")
+            self.display_message("[OK] Connected to server with TLS encryption!", "server")
             return True
         
         except Exception as e:
-            self.display_message(f"✗ Connection failed: {e}", "server")
+            self.display_message(f"[ERROR] Connection failed: {e}", "server")
             messagebox.showerror("Connection Error", f"Failed to connect to server:\n{e}")
             return False
     
@@ -488,7 +493,7 @@ class ChatGUI:
             response = self.client_socket.recv(1024).decode('utf-8')
             
             if response != config.AUTH_REQUIRED:
-                self.display_message(f"✗ Unexpected server response: {response}", "server")
+                self.display_message(f"[ERROR] Unexpected server response: {response}", "server")
                 return False
             
             # Show login window
@@ -496,7 +501,7 @@ class ChatGUI:
             self.window.wait_window(login_window.window)
             
             if not login_window.success:
-                return False
+                return "CANCEL"
             
             # Send login or register
             if login_window.is_register:
@@ -507,7 +512,7 @@ class ChatGUI:
             # Receive ENTER_USERNAME
             response = self.client_socket.recv(1024).decode('utf-8')
             if response != config.ENTER_USERNAME:
-                self.display_message(f"✗ Error: {response}", "server")
+                self.display_message(f"[ERROR] Error: {response}", "server")
                 return False
             
             # Send username
@@ -516,7 +521,7 @@ class ChatGUI:
             # Receive ENTER_PASSWORD
             response = self.client_socket.recv(1024).decode('utf-8')
             if response != config.ENTER_PASSWORD:
-                self.display_message(f"✗ Error: {response}", "server")
+                self.display_message(f"[ERROR] Error: {response}", "server")
                 return False
             
             # Send password
@@ -530,8 +535,8 @@ class ChatGUI:
                 parts = response.split('|')
                 self.username = parts[1] if len(parts) > 1 else login_window.username
                 
-                self.display_message(f"✓ Logged in as: {self.username}", "server")
-                self.status_label.config(text=f"🔒 Secure Business Chat - Connected as {self.username} (TLS)")
+                self.display_message(f"[OK] Logged in as: {self.username}", "server")
+                self.status_label.config(text=f"[SECURE] Secure Business Chat - Connected as {self.username} (TLS)")
                 self.connection_status.config(text="● Online (TLS)", fg="#51cf66")
                 
                 # Don't add self here - server will send complete user list via [USERS_LIST]
@@ -552,11 +557,11 @@ class ChatGUI:
                 return False
             
             else:
-                self.display_message(f"✗ Error: {response}", "server")
+                self.display_message(f"[ERROR] Error: {response}", "server")
                 return False
         
         except Exception as e:
-            self.display_message(f"✗ Authentication error: {e}", "server")
+            self.display_message(f"[ERROR] Authentication error: {e}", "server")
             messagebox.showerror("Authentication Error", f"Authentication failed:\n{e}")
             return False
     
@@ -640,19 +645,29 @@ class ChatGUI:
     
     def start(self):
         """Start the chat client."""
-        # Connect to server
-        if not self.connect():
-            self.window.after(100, self.window.destroy)
-            return
-        
-        # Authenticate
-        if not self.authenticate():
-            self.display_message("[!] Authentication failed. Exiting...", "server")
-            self.window.after(2000, self.window.destroy)
-            return
-        
-        # Start running
-        self.running = True
+        while not self.running:
+            # Connect to server
+            if not self.connect():
+                self.window.after(100, self.window.destroy)
+                return
+            
+            # Authenticate
+            auth_result = self.authenticate()
+            if auth_result == "CANCEL":
+                self.window.after(100, self.window.destroy)
+                return
+            if not auth_result:
+                self.display_message("[!] Authentication failed. Please try again.", "server")
+                if self.client_socket:
+                    try:
+                        self.client_socket.close()
+                    except:
+                        pass
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                continue
+            
+            # Start running
+            self.running = True
         
         # Start receive thread
         receive_thread = threading.Thread(target=self.receive_messages)
@@ -691,7 +706,7 @@ class ChatGUI:
     def show_help(self):
         """Show help dialog with available commands."""
         help_text = """
-🔒 SECURE BUSINESS CHAT - HELP
+[SECURE] SECURE BUSINESS CHAT - HELP
 
 COMMANDS:
 • Type message and press Enter to send
@@ -721,19 +736,19 @@ TIPS:
     def show_about(self):
         """Show about dialog."""
         about_text = """
-🔒 Secure Business Chat System
+[SECURE] Secure Business Chat System
 Version 2.1 (TLS Edition)
 
 Enterprise-Grade Secure Messaging
 
 Features:
-✓ TLS 1.2+ Transport Encryption
-✓ Multi-threaded Server
-✓ Real-time Communication
-✓ User Authentication
-✓ Message History
-✓ Professional UI/UX
-✓ Certificate-based Security
+[OK] TLS 1.2+ Transport Encryption
+[OK] Multi-threaded Server
+[OK] Real-time Communication
+[OK] User Authentication
+[OK] Message History
+[OK] Professional UI/UX
+[OK] Certificate-based Security
 
 Developed with Python & Tkinter
 © 2024 Secure Business Chat

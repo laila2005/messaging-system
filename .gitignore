@@ -1,0 +1,38 @@
+# Environments
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.venv/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+
+# Databases
+*.db
+*.sqlite3
+
+# Node.js
+node_modules/
+.next/
+out/
+build/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Uploads
+uploads/

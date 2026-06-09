@@ -100,22 +100,22 @@ class TLSConfig:
                     encryption_algorithm=serialization.NoEncryption()
                 ))
             
-            print(f"✓ Generated self-signed certificate:")
+            print(f"[OK] Generated self-signed certificate:")
             print(f"  Certificate: {self.cert_file}")
             print(f"  Private key: {self.key_file}")
             print(f"  Hostname: {hostname}")
             print(f"  Local IP: {local_ip}")
-            print("\n⚠️  WARNING: Self-signed certificate for development only!")
+            print("\n[WARNING] Self-signed certificate for development only!")
             print("   For production, use certificates from a proper CA.")
             
             return True
             
         except ImportError:
-            print("✗ cryptography library not installed. Install with:")
+            print("[ERROR] cryptography library not installed. Install with:")
             print("   pip install cryptography")
             return False
         except Exception as e:
-            print(f"✗ Failed to generate certificate: {e}")
+            print(f"[ERROR] Failed to generate certificate: {e}")
             return False
     
     def create_server_context(self):
@@ -147,7 +147,7 @@ class TLSConfig:
         # Enable perfect forward secrecy
         context.options |= ssl.OP_NO_COMPRESSION
         
-        print(f"✓ Server TLS context configured")
+        print(f"[OK] Server TLS context configured")
         print(f"  Certificate: {self.cert_file}")
         print(f"  Minimum TLS version: 1.2")
         
@@ -170,19 +170,19 @@ class TLSConfig:
             # For development with self-signed certificates
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            print("⚠️  Certificate verification disabled (development mode)")
+            print("[WARNING] Certificate verification disabled (development mode)")
         else:
             # Load our self-signed certificate for verification
             if self.cert_file.exists():
                 context.load_verify_locations(str(self.cert_file))
-                print(f"✓ Using certificate for verification: {self.cert_file}")
+                print(f"[OK] Using certificate for verification: {self.cert_file}")
         
         # Configure secure settings
         context.set_ciphers('ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS')
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.options |= ssl.OP_NO_COMPRESSION
         
-        print(f"✓ Client TLS context configured")
+        print(f"[OK] Client TLS context configured")
         
         return context
     
@@ -194,20 +194,20 @@ class TLSConfig:
             bool: True if certificates are valid
         """
         if not self.cert_file.exists():
-            print(f"✗ Certificate file not found: {self.cert_file}")
+            print(f"[ERROR] Certificate file not found: {self.cert_file}")
             return False
         
         if not self.key_file.exists():
-            print(f"✗ Private key file not found: {self.key_file}")
+            print(f"[ERROR] Private key file not found: {self.key_file}")
             return False
         
         try:
             # Try to create context to validate certificates
             self.create_server_context()
-            print("✓ TLS certificates are valid")
+            print("[OK] TLS certificates are valid")
             return True
         except Exception as e:
-            print(f"✗ Invalid TLS certificates: {e}")
+            print(f"[ERROR] Invalid TLS certificates: {e}")
             return False
 
 
@@ -229,7 +229,7 @@ def setup_tls_for_development():
         tls_config.generate_self_signed_cert()
     
     print("=" * 50)
-    print("✓ TLS setup complete!")
+    print("[OK] TLS setup complete!")
     
     return tls_config
 
@@ -242,6 +242,6 @@ if __name__ == "__main__":
     try:
         server_context = tls_config.create_server_context()
         client_context = tls_config.create_client_context(verify=False)
-        print("\n✓ TLS contexts created successfully!")
+        print("\n[OK] TLS contexts created successfully!")
     except Exception as e:
-        print(f"\n✗ TLS context creation failed: {e}")
+        print(f"\n[ERROR] TLS context creation failed: {e}")

@@ -18,7 +18,7 @@ class Database:
         # Create tables
         self.create_tables()
         
-        print(f"✓ Database initialized: {db_name}")
+        print(f"[OK] Database initialized: {db_name}")
     
     def create_tables(self):
       
@@ -59,15 +59,15 @@ class Database:
             )
             
             self.conn.commit()
-            print(f"✓ User registered: {username}")
+            print(f"[OK] User registered: {username}")
             return True
             
         except sqlite3.IntegrityError:
             # Username already exists (UNIQUE constraint violation)
-            print(f"✗ Registration failed: Username '{username}' already exists")
+            print(f"[ERROR] Registration failed: Username '{username}' already exists")
             return False
         except Exception as e:
-            print(f"✗ Registration error: {e}")
+            print(f"[ERROR] Registration error: {e}")
             return False
     
     def authenticate_user(self, username, password):
@@ -83,14 +83,14 @@ class Database:
             result = self.cursor.fetchone()
             
             if result:
-                print(f"✓ Authentication successful: {username}")
+                print(f"[OK] Authentication successful: {username}")
                 return True
             else:
-                print(f"✗ Authentication failed: Invalid credentials for {username}")
+                print(f"[ERROR] Authentication failed: Invalid credentials for {username}")
                 return False
                 
         except Exception as e:
-            print(f"✗ Authentication error: {e}")
+            print(f"[ERROR] Authentication error: {e}")
             return False
     
     def username_exists(self, username):
@@ -102,7 +102,7 @@ class Database:
             )
             return self.cursor.fetchone() is not None
         except Exception as e:
-            print(f"✗ Error checking username: {e}")
+            print(f"[ERROR] Error checking username: {e}")
             return False
     
     def log_message(self, username, message):
@@ -115,7 +115,7 @@ class Database:
             self.conn.commit()
             return True
         except Exception as e:
-            print(f"✗ Error logging message: {e}")
+            print(f"[ERROR] Error logging message: {e}")
             return False
     
     def get_chat_history(self, limit=50):
@@ -129,7 +129,7 @@ class Database:
             return list(reversed(messages))
             
         except Exception as e:
-            print(f"✗ Error retrieving chat history: {e}")
+            print(f"[ERROR] Error retrieving chat history: {e}")
             return []
     
     def get_user_count(self):
@@ -138,7 +138,7 @@ class Database:
             self.cursor.execute('SELECT COUNT(*) FROM users')
             return self.cursor.fetchone()[0]
         except Exception as e:
-            print(f"✗ Error getting user count: {e}")
+            print(f"[ERROR] Error getting user count: {e}")
             return 0
     
     def get_message_count(self):
@@ -147,13 +147,13 @@ class Database:
             self.cursor.execute('SELECT COUNT(*) FROM messages')
             return self.cursor.fetchone()[0]
         except Exception as e:
-            print(f"✗ Error getting message count: {e}")
+            print(f"[ERROR] Error getting message count: {e}")
             return 0
     
     def close(self):
         
         self.conn.close()
-        print("✓ Database connection closed")
+        print("[OK] Database connection closed")
 
 
 if __name__ == "__main__":
@@ -184,5 +184,5 @@ if __name__ == "__main__":
     for username, message, timestamp in history:
         print(f"  [{timestamp}] {username}: {message}")
     
-    print("\n✓ Database tests complete!")
+    print("\n[OK] Database tests complete!")
     db.close()

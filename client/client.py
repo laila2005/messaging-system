@@ -1,4 +1,4 @@
-# clint/client.py - Command-Line Chat Client
+# client/client.py - Command-Line Chat Client
 """
 CLI (Command-Line Interface) chat client.
 
@@ -17,6 +17,11 @@ import socket
 import threading
 import sys
 import os
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -88,7 +93,7 @@ class ChatClient:
             print("="*60)
             
             while True:
-                choice = input("\nEnter choice (1 or 2): ").strip()
+                choice = input("\nEnter choice (1 or 2, or 'q' to quit): ").strip().lower()
                 
                 if choice == '1':
                     self.client_socket.send(config.LOGIN.encode('utf-8'))
@@ -96,8 +101,10 @@ class ChatClient:
                 elif choice == '2':
                     self.client_socket.send(config.REGISTER.encode('utf-8'))
                     break
+                elif choice == 'q':
+                    return "CANCEL"
                 else:
-                    print("Invalid choice. Please enter 1 or 2.")
+                    print("Invalid choice. Please enter 1, 2, or q.")
             
             # Receive ENTER_USERNAME
             response = self.client_socket.recv(1024).decode('utf-8')
@@ -223,17 +230,23 @@ class ChatClient:
         Start the chat client.
         """
         try:
-            # Connect to server
-            if not self.connect():
-                return
-            
-            # Authenticate
-            if not self.authenticate():
-                print("\n[!] Authentication failed. Exiting...")
-                return
-            
-            # Start running
-            self.running = True
+            while not self.running:
+                # Connect to server
+                if not self.connect():
+                    return
+                
+                # Authenticate
+                auth_result = self.authenticate()
+                if auth_result == "CANCEL":
+                    return
+                if not auth_result:
+                    print("\n[!] Authentication failed. Please try again.")
+                    self.client_socket.close()
+                    self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    continue
+                
+                # Start running
+                self.running = True
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages)
