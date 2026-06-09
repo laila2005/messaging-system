@@ -57,8 +57,8 @@ graph TD
     WS --> DB
     
     %% WebRTC Connection
-    Web <.->|WebRTC P2P (Video/Audio)| Web
-    Desktop <.->|WebRTC P2P (Video/Audio)| Mobile
+    Web <-->|WebRTC P2P (Video/Audio)| Web
+    Desktop <-->|WebRTC P2P (Video/Audio)| Mobile
 ```
 
 ---
