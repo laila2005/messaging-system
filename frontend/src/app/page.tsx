@@ -519,7 +519,7 @@ export default function ChatApp() {
           </div>
         </div>
       ) : (
-        <div className={`flex-1 flex flex-col h-full bg-[#121212] relative z-0 ${chatMode === "none" ? "hidden" : "flex"}`}>
+        <div className={`flex-1 flex flex-col h-full bg-[#121212] relative z-0 flex`}>
           <div className="h-[88px] px-4 md:px-6 border-b border-white/5 flex items-center justify-between bg-[#1E1E1E]">
             <div className="flex items-center gap-2 md:gap-4">
               <button className="md:hidden w-11 h-11 flex items-center justify-center text-white/70 hover:text-white rounded-full hover:bg-white/5" onClick={() => setChatMode("none")}><ArrowLeft size={24} /></button>
