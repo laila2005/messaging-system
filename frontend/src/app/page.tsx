@@ -375,7 +375,14 @@ export default function ChatApp() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, email: email || undefined, phone_number: phoneNumber || undefined })
       });
-      if (!regRes.ok) return setError("Invalid credentials or username already taken.");
+      if (!regRes.ok) {
+        try {
+          const errorData = await regRes.json();
+          return setError(errorData.detail || "Invalid credentials or username already taken.");
+        } catch {
+          return setError("Server error or connection failed");
+        }
+      }
       handleLogin(e);
     } catch (err) { setError("Cannot connect to server."); }
   };
@@ -389,7 +396,14 @@ export default function ChatApp() {
       formData.append("username", username);
       formData.append("password", password);
       let res = await fetch(`${API_URL}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
-      if (!res.ok) return setError("Invalid username or password.");
+      if (!res.ok) {
+        try {
+          const errorData = await res.json();
+          return setError(errorData.detail || "Invalid username or password.");
+        } catch {
+          return setError("Server error or connection failed");
+        }
+      }
       const data = await res.json();
       setToken(data.access_token);
       const userRes = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${data.access_token}` } });
