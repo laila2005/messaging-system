@@ -61,6 +61,8 @@ export default function ChatApp() {
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
+  const [activeChats, setActiveChats] = useState<string[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingSentRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,13 +123,23 @@ export default function ChatApp() {
           setSystemAlert(data.content);
           setTimeout(() => setSystemAlert(null), 5000);
         } else if (data.type === "message") {
+          const isFromMe = data.sender_username === currentUser?.username;
+          
+          // Increment unread count if we're not currently chatting with this user
+          if (!isFromMe && data.sender_username !== selectedUser) {
+            setUnreadCounts(prev => ({ ...prev, [data.sender_username]: (prev[data.sender_username] || 0) + 1 }));
+            // Also ensure they are in active chats
+            setActiveChats(prev => prev.includes(data.sender_username) ? prev : [...prev, data.sender_username]);
+          }
+
           setMessages(prev => {
             if (prev.some(m => m.id === data.id)) return prev;
             return [...prev, {
               id: data.id, sender: data.sender_username, content: data.content,
               type: data.recipient_id ? "direct" : "broadcast", recipient: data.recipient_username,
               attachment_url: data.attachment_url,
-              timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+              timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+              status: data.status
             }];
           });
         } else if (data.type === "typing") {
@@ -162,7 +174,7 @@ export default function ChatApp() {
       ws.current = socket;
       return () => socket.close();
     }
-  }, [isLoggedIn, token]);
+  }, [isLoggedIn, token, currentUser, selectedUser]);
 
   const fetchChatHistory = async (targetUser: string | null) => {
     if (!token) return;
@@ -220,11 +232,22 @@ export default function ChatApp() {
     if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream, isCalling]);
 
-  const filteredUsers = onlineUsers.filter(user => user.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Compute sorted sidebar users
+  const allSidebarUsers = Array.from(new Set([...onlineUsers, ...activeChats]));
+  const filteredUsers = allSidebarUsers
+    .filter(user => user.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      // Bubble unread users to top
+      const aUnread = unreadCounts[a] || 0;
+      const bUnread = unreadCounts[b] || 0;
+      if (aUnread > 0 && bUnread === 0) return -1;
+      if (bUnread > 0 && aUnread === 0) return 1;
+      return a.localeCompare(b);
+    });
 
   const startNewChat = () => {
-    if (searchQuery.trim() && !onlineUsers.includes(searchQuery.toLowerCase())) {
-      setOnlineUsers([...onlineUsers, searchQuery.toLowerCase()]);
+    if (searchQuery.trim() && !allSidebarUsers.includes(searchQuery.toLowerCase())) {
+      setActiveChats([...activeChats, searchQuery.toLowerCase()]);
       setSelectedUser(searchQuery.toLowerCase());
       setChatMode("direct");
       setSearchQuery("");
@@ -551,9 +574,38 @@ export default function ChatApp() {
         </div>
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1 custom-scrollbar">
           <button onClick={() => { setChatMode("broadcast"); setSelectedUser(null); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${chatMode === "broadcast" ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 text-white/70 flex items-center justify-center"><Globe size={20} /></div><div className="flex flex-col items-start"><span className="font-semibold text-[15px]">Global Room</span><span className="text-xs text-white/40">Public Broadcast</span></div></button>
-          {filteredUsers.map(user => (
-            <button key={user} onClick={() => { setChatMode("direct"); setSelectedUser(user); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="relative"><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-lg text-white/80">{user.charAt(0).toUpperCase()}</div><span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span></div><div className="flex flex-col items-start flex-1 overflow-hidden"><span className="font-semibold text-[15px] truncate w-full text-left">{user}</span><span className="text-xs text-green-400">online</span></div></button>
-          ))}
+          {filteredUsers.map(user => {
+            const isOnline = onlineUsers.includes(user);
+            const unread = unreadCounts[user] || 0;
+            return (
+            <button key={user} onClick={() => { 
+              setChatMode("direct"); 
+              setSelectedUser(user); 
+              if (unread > 0) {
+                setUnreadCounts(prev => ({ ...prev, [user]: 0 }));
+                if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+                  getUserId(user).then(uid => {
+                    ws.current?.send(JSON.stringify({ type: "mark_read", sender_id: uid }));
+                  });
+                }
+              }
+            }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}>
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-lg text-white/80">{user.charAt(0).toUpperCase()}</div>
+                {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>}
+              </div>
+              <div className="flex flex-col items-start flex-1 overflow-hidden">
+                <span className={`font-semibold text-[15px] truncate w-full text-left ${unread > 0 ? "text-white" : "text-white/80"}`}>{user}</span>
+                <span className={`text-xs ${isOnline ? "text-green-400" : "text-white/40"}`}>{isOnline ? "online" : "offline"}</span>
+              </div>
+              {unread > 0 && (
+                <div className="flex items-center justify-center bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                  {unread}
+                </div>
+              )}
+            </button>
+            );
+          })}
         </div>
         <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); setIsLoggedIn(false); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
       </div>
