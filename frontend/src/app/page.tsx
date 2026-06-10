@@ -489,7 +489,7 @@ export default function ChatApp() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#121212]">
+      <div className="min-h-[100dvh] flex items-start md:items-center justify-center p-4 py-12 md:py-4 bg-[#121212] overflow-y-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[#1E1E1E] w-full max-w-md p-8 rounded-3xl shadow-2xl relative overflow-hidden border border-white/5">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-primary"></div>
           <div className="text-center mb-8">
