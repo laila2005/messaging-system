@@ -63,7 +63,7 @@ export default function ChatApp() {
 
   const fetchOnlineUsers = async () => {
     try {
-      const res = await fetch("http://localhost:8000/users");
+      const res = await fetch(`${API_URL}/users");
       if (res.ok) {
         const users = await res.json();
         setOnlineUsers(users.map((u: any) => u.username).filter((u: string) => u !== username));
@@ -75,7 +75,7 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (isLoggedIn && token) {
-      const socket = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+      const socket = new WebSocket(`${WS_URL}/ws?token=${token}`);
       
       socket.onopen = () => fetchOnlineUsers();
       
@@ -132,7 +132,7 @@ export default function ChatApp() {
   const fetchChatHistory = async (targetUser: string | null) => {
     if (!token) return;
     try {
-      let url = "http://localhost:8000/messages";
+      let url = `${API_URL}/messages";
       if (targetUser) url += `?target_username=${encodeURIComponent(targetUser)}`;
       const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
       if (res.ok) {
@@ -157,7 +157,7 @@ export default function ChatApp() {
     if (!token) return;
     const msgsContent = contextMsgs.map(m => m.content).filter(Boolean).slice(-5);
     try {
-      const res = await fetch("http://localhost:8000/ai/smart-replies", {
+      const res = await fetch(`${API_URL}/ai/smart-replies", {
          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
          body: JSON.stringify({ messages: msgsContent })
       });
@@ -197,7 +197,7 @@ export default function ChatApp() {
   };
 
   const getUserId = async (uname: string) => {
-    const res = await fetch("http://localhost:8000/users");
+    const res = await fetch(`${API_URL}/users");
     const users = await res.json();
     return users.find((u: any) => u.username === uname)?.id;
   };
@@ -336,7 +336,7 @@ export default function ChatApp() {
     if (username.length < 3) return setError("Username must be at least 3 characters");
     setError("");
     try {
-      const regRes = await fetch("http://localhost:8000/register", {
+      const regRes = await fetch(`${API_URL}/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, email: email || undefined, phone_number: phoneNumber || undefined })
       });
@@ -353,11 +353,11 @@ export default function ChatApp() {
       const formData = new URLSearchParams();
       formData.append("username", username);
       formData.append("password", password);
-      let res = await fetch("http://localhost:8000/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
+      let res = await fetch(`${API_URL}/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
       if (!res.ok) return setError("Invalid username or password.");
       const data = await res.json();
       setToken(data.access_token);
-      const userRes = await fetch("http://localhost:8000/users/me", { headers: { "Authorization": `Bearer ${data.access_token}` } });
+      const userRes = await fetch(`${API_URL}/users/me", { headers: { "Authorization": `Bearer ${data.access_token}` } });
       const userData = await userRes.json();
       setUserId(userData.id); setCurrentUser(userData); setProfileEmail(userData.email || ""); setProfilePhone(userData.phone_number || "");
       setIsLoggedIn(true);
@@ -378,7 +378,7 @@ export default function ChatApp() {
       const formData = new FormData();
       formData.append("file", attachmentFile);
       try {
-        const uploadRes = await fetch("http://localhost:8000/messages/attachment", {
+        const uploadRes = await fetch(`${API_URL}/messages/attachment", {
           method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData
         });
         if (uploadRes.ok) {
@@ -406,9 +406,9 @@ export default function ChatApp() {
     if (!url) return null;
     const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
     const isAudio = url.match(/\.(webm|mp3|wav|ogg)$/i);
-    if (isImage) return <img src={`http://localhost:8000${url}`} alt="attachment" className="max-w-[250px] rounded-xl mb-2 border border-white/10 shadow-md" />;
-    if (isAudio) return <audio controls src={`http://localhost:8000${url}`} className="max-w-[250px] mb-2" />;
-    return <a href={`http://localhost:8000${url}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-white/10 p-3 rounded-xl mb-2 text-sm hover:bg-white/20 transition-colors w-max"><Paperclip size={16} /> Download File</a>;
+    if (isImage) return <img src={`${API_URL}${url}`} alt="attachment" className="max-w-[250px] rounded-xl mb-2 border border-white/10 shadow-md" />;
+    if (isAudio) return <AudioPlayer src={`${API_URL}${url}`} />;
+    return <a href={`${API_URL}${url}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-white/10 p-3 rounded-xl mb-2 text-sm hover:bg-white/20 transition-colors w-max"><Paperclip size={16} /> Download File</a>;
   };
 
   const handleSummarize = async () => {
@@ -419,7 +419,7 @@ export default function ChatApp() {
         (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))
       ).map(m => m.content).filter(Boolean);
       
-      const res = await fetch("http://localhost:8000/ai/summarize", {
+      const res = await fetch(`${API_URL}/ai/summarize", {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ messages: msgsToSummarize })
@@ -436,16 +436,16 @@ export default function ChatApp() {
     e.preventDefault();
     if (!token) return;
     try {
-      await fetch("http://localhost:8000/users/me", {
+      await fetch(`${API_URL}/users/me", {
         method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ email: profileEmail || null, phone_number: profilePhone || null })
       });
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        await fetch("http://localhost:8000/users/me/avatar", { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
+        await fetch(`${API_URL}/users/me/avatar", { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
       }
-      const userRes = await fetch("http://localhost:8000/users/me", { headers: { "Authorization": `Bearer ${token}` } });
+      const userRes = await fetch(`${API_URL}/users/me", { headers: { "Authorization": `Bearer ${token}` } });
       const userData = await userRes.json();
       setCurrentUser(userData);
       setShowProfileModal(false);
@@ -506,7 +506,7 @@ export default function ChatApp() {
             <button key={user} onClick={() => { setChatMode("direct"); setSelectedUser(user); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="relative"><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-lg text-white/80">{user.charAt(0).toUpperCase()}</div><span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span></div><div className="flex flex-col items-start flex-1 overflow-hidden"><span className="font-semibold text-[15px] truncate w-full text-left">{user}</span><span className="text-xs text-green-400">online</span></div></button>
           ))}
         </div>
-        <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); setIsLoggedIn(false); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
+        <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); setIsLoggedIn(false); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
       </div>
 
       {/* Main Area: Empty State OR Chat View */}
@@ -557,7 +557,7 @@ export default function ChatApp() {
               {messages.filter(m => (chatMode === "broadcast" && m.type === "broadcast") || (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))).map((msg) => (
                 <motion.div key={msg.id} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`flex ${msg.sender === username ? "justify-end" : "justify-start"}`}>
                   <div className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${msg.sender === username ? "flex-row-reverse" : "flex-row"}`}>
-                    <div className="flex-shrink-0 mt-auto mb-1">{msg.sender === username && currentUser?.avatar_url ? (<img src={`http://localhost:8000${currentUser.avatar_url}`} className="w-8 h-8 rounded-full border border-white/10 object-cover" />) : (<div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${msg.sender === username ? 'bg-gradient-primary' : 'bg-[#1E1E1E]'}`}>{msg.sender.charAt(0).toUpperCase()}</div>)}</div>
+                    <div className="flex-shrink-0 mt-auto mb-1">{msg.sender === username && currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} className="w-8 h-8 rounded-full border border-white/10 object-cover" />) : (<div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${msg.sender === username ? 'bg-gradient-primary' : 'bg-[#1E1E1E]'}`}>{msg.sender.charAt(0).toUpperCase()}</div>)}</div>
                     <div className={`flex flex-col gap-1 ${msg.sender === username ? "items-end" : "items-start"}`}>
                       <div className="flex items-baseline gap-2 mx-1">
                         <span className="text-sm font-semibold text-white/90">{msg.sender === username ? "You" : msg.sender}</span>
@@ -642,7 +642,7 @@ export default function ChatApp() {
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="bg-[#1E1E1E] relative rounded-3xl p-8 w-full max-w-md shadow-2xl z-10 border border-white/5">
               <h2 className="text-2xl font-bold mb-6 text-center">Edit Profile</h2>
               <form onSubmit={handleSaveProfile} className="space-y-5">
-                <div className="flex justify-center mb-6"><label className="cursor-pointer group relative">{avatarPreview || currentUser?.avatar_url ? (<img src={avatarPreview || `http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-[3px] border-purple-500 shadow-lg" />) : (<div className="w-24 h-24 rounded-full bg-gradient-primary flex items-center justify-center text-3xl font-bold border-[3px] border-transparent shadow-lg">{username.charAt(0).toUpperCase()}</div>)}<div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-sm font-medium text-white">Change</span></div><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }} /></label></div>
+                <div className="flex justify-center mb-6"><label className="cursor-pointer group relative">{avatarPreview || currentUser?.avatar_url ? (<img src={avatarPreview || `${API_URL}${currentUser.avatar_url}`} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-[3px] border-purple-500 shadow-lg" />) : (<div className="w-24 h-24 rounded-full bg-gradient-primary flex items-center justify-center text-3xl font-bold border-[3px] border-transparent shadow-lg">{username.charAt(0).toUpperCase()}</div>)}<div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-sm font-medium text-white">Change</span></div><input type="file" className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }} /></label></div>
                 <div><label className="block text-sm font-medium text-white/70 mb-2">Email Address</label><input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none" /></div>
                 <div><label className="block text-sm font-medium text-white/70 mb-2">Phone Number</label><input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-white/20 focus:outline-none" /></div>
                 <div className="flex gap-3 mt-8"><button type="button" onClick={() => setShowProfileModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-medium text-white/80 transition-colors">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-gradient-primary glow-primary active:scale-95 font-medium transition-transform">Save Changes</button></div>
