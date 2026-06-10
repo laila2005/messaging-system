@@ -2,9 +2,44 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Globe, LogOut, Shield, Search, Smile, Paperclip, Mic, ArrowLeft, Phone, Video, PhoneOff, VideoOff, MicOff, PhoneCall, Sparkles } from "lucide-react";
+import { Lock, Globe, LogOut, Shield, Search, Smile, Paperclip, Mic, ArrowLeft, Phone, Video, PhoneOff, VideoOff, MicOff, PhoneCall, Sparkles, Play, Pause } from "lucide-react";
+
+
+const AudioPlayer = ({ src }: { src: string }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) audioRef.current.pause();
+      else audioRef.current.play();
+      setIsPlaying(!isPlaying);
+    }
+  };
+  
+  return (
+    <div className="flex items-center gap-3 bg-[#1E1E1E] border border-white/10 rounded-full py-2 px-4 mb-2 w-max shadow-md">
+      <button onClick={togglePlay} className="w-8 h-8 flex items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-500 transition-colors">
+        {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+      </button>
+      <div className="flex items-center gap-1">
+        <div className="w-1 h-3 bg-white/40 rounded-full animate-pulse"></div>
+        <div className="w-1 h-5 bg-purple-500/60 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+        <div className="w-1 h-4 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+        <div className="w-1 h-6 bg-purple-500/80 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+        <div className="w-1 h-4 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+        <div className="w-1 h-3 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+      </div>
+      <span className="text-xs font-medium text-white/70 ml-2">Voice Note</span>
+      <audio ref={audioRef} src={src} onEnded={() => setIsPlaying(false)} />
+    </div>
+  );
+};
 
 export default function ChatApp() {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+  const WS_URL = API_URL.replace("http", "ws");
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
@@ -63,7 +98,7 @@ export default function ChatApp() {
 
   const fetchOnlineUsers = async () => {
     try {
-      const res = await fetch(`${API_URL}/users");
+      const res = await fetch(`${API_URL}/users`);
       if (res.ok) {
         const users = await res.json();
         setOnlineUsers(users.map((u: any) => u.username).filter((u: string) => u !== username));
@@ -132,7 +167,7 @@ export default function ChatApp() {
   const fetchChatHistory = async (targetUser: string | null) => {
     if (!token) return;
     try {
-      let url = `${API_URL}/messages";
+      let url = `${API_URL}/messages`;
       if (targetUser) url += `?target_username=${encodeURIComponent(targetUser)}`;
       const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
       if (res.ok) {
@@ -157,7 +192,7 @@ export default function ChatApp() {
     if (!token) return;
     const msgsContent = contextMsgs.map(m => m.content).filter(Boolean).slice(-5);
     try {
-      const res = await fetch(`${API_URL}/ai/smart-replies", {
+      const res = await fetch(`${API_URL}/ai/smart-replies`, {
          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
          body: JSON.stringify({ messages: msgsContent })
       });
@@ -197,7 +232,7 @@ export default function ChatApp() {
   };
 
   const getUserId = async (uname: string) => {
-    const res = await fetch(`${API_URL}/users");
+    const res = await fetch(`${API_URL}/users`);
     const users = await res.json();
     return users.find((u: any) => u.username === uname)?.id;
   };
@@ -336,7 +371,7 @@ export default function ChatApp() {
     if (username.length < 3) return setError("Username must be at least 3 characters");
     setError("");
     try {
-      const regRes = await fetch(`${API_URL}/register", {
+      const regRes = await fetch(`${API_URL}/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, email: email || undefined, phone_number: phoneNumber || undefined })
       });
@@ -353,11 +388,11 @@ export default function ChatApp() {
       const formData = new URLSearchParams();
       formData.append("username", username);
       formData.append("password", password);
-      let res = await fetch(`${API_URL}/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
+      let res = await fetch(`${API_URL}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData });
       if (!res.ok) return setError("Invalid username or password.");
       const data = await res.json();
       setToken(data.access_token);
-      const userRes = await fetch(`${API_URL}/users/me", { headers: { "Authorization": `Bearer ${data.access_token}` } });
+      const userRes = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${data.access_token}` } });
       const userData = await userRes.json();
       setUserId(userData.id); setCurrentUser(userData); setProfileEmail(userData.email || ""); setProfilePhone(userData.phone_number || "");
       setIsLoggedIn(true);
@@ -378,7 +413,7 @@ export default function ChatApp() {
       const formData = new FormData();
       formData.append("file", attachmentFile);
       try {
-        const uploadRes = await fetch(`${API_URL}/messages/attachment", {
+        const uploadRes = await fetch(`${API_URL}/messages/attachment`, {
           method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData
         });
         if (uploadRes.ok) {
@@ -419,7 +454,7 @@ export default function ChatApp() {
         (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))
       ).map(m => m.content).filter(Boolean);
       
-      const res = await fetch(`${API_URL}/ai/summarize", {
+      const res = await fetch(`${API_URL}/ai/summarize`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ messages: msgsToSummarize })
@@ -436,16 +471,16 @@ export default function ChatApp() {
     e.preventDefault();
     if (!token) return;
     try {
-      await fetch(`${API_URL}/users/me", {
+      await fetch(`${API_URL}/users/me`, {
         method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ email: profileEmail || null, phone_number: profilePhone || null })
       });
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        await fetch(`${API_URL}/users/me/avatar", { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
+        await fetch(`${API_URL}/users/me/avatar`, { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
       }
-      const userRes = await fetch(`${API_URL}/users/me", { headers: { "Authorization": `Bearer ${token}` } });
+      const userRes = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
       const userData = await userRes.json();
       setCurrentUser(userData);
       setShowProfileModal(false);
@@ -458,7 +493,7 @@ export default function ChatApp() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[#1E1E1E] w-full max-w-md p-8 rounded-3xl shadow-2xl relative overflow-hidden border border-white/5">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-primary"></div>
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 border border-white/10 text-white mb-4 shadow-lg"><Shield size={32} /></div>
+            <img src="/logo.png" alt="Zagel" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]" />
             <h1 className="text-3xl font-bold text-white mb-2">{authMode === "login" ? "Sign In" : "Create Account"}</h1>
             <p className="text-white/50">Enterprise-grade encrypted messaging</p>
           </div>
@@ -497,7 +532,7 @@ export default function ChatApp() {
       {/* Sidebar: Shows full width on mobile if no chat is selected, hidden otherwise */}
       <div className={`w-full md:w-80 h-full flex flex-col border-r border-white/5 bg-[#1E1E1E] z-40 shrink-0 ${chatMode !== "none" ? "hidden md:flex" : "flex"}`}>
         <div className="p-6">
-          <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold tracking-wide">Active Users</h2></div>
+          <div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><img src="/logo.png" alt="Zagel" className="w-8 h-8 object-contain drop-shadow-md" /><h2 className="text-xl font-bold tracking-wide">Zagel</h2></div></div>
           <div className="relative mb-6"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" /><input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && startNewChat()} className="w-full bg-[#121212] border border-white/5 rounded-full pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-white/20 transition-colors" /></div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1 custom-scrollbar">
@@ -513,8 +548,8 @@ export default function ChatApp() {
       {chatMode === "none" ? (
         <div className="hidden md:flex flex-1 items-center justify-center bg-[#121212]">
           <div className="text-center opacity-30">
-            <Lock size={64} className="mx-auto mb-6" />
-            <h2 className="text-3xl font-bold mb-2 tracking-tight">Secure Business Chat</h2>
+            <img src="/logo.png" alt="Zagel" className="w-28 h-28 mx-auto mb-6 object-contain opacity-50 drop-shadow-lg" />
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">Zagel Messaging</h2>
             <p className="text-lg">Select a user or room to start messaging</p>
           </div>
         </div>
