@@ -15,9 +15,12 @@ function createWindow() {
     autoHideMenuBar: true,
   });
 
-  // In development, load the Next.js local server
-  // In production, you would load the static 'out/index.html' file
-  mainWindow.loadURL('http://localhost:3005');
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:3000');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'out/index.html'));
+  }
 
   mainWindow.on('closed', function () {
     mainWindow = null;

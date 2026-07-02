@@ -9,7 +9,13 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Zagel | زاجل",
-  description: "Fast & secure messaging platform",
+  description: "Secure, encrypted messaging and video calling — better than WhatsApp.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Zagel",
+  },
 };
 
 export default function RootLayout({
@@ -22,7 +28,30 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} h-full antialiased font-sans`}
     >
-      <body className="min-h-full flex flex-col bg-[#121212]">{children}</body>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Zagel" />
+        <meta name="theme-color" content="#a855f7" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+      </head>
+      <body className="min-h-full flex flex-col bg-[#121212]">{children}
+        <script dangerouslySetInnerHTML={{__html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                console.log('[SW] Registered:', reg.scope);
+              }).catch(function(err) {
+                console.error('[SW] Registration failed:', err);
+              });
+            });
+          }
+        `}} />
+      </body>
     </html>
   );
 }
+

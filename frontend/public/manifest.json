@@ -1,0 +1,32 @@
+{
+  "name": "Zagel | زاجل",
+  "short_name": "Zagel",
+  "description": "Secure, encrypted messaging and video calling — better than WhatsApp.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#050505",
+  "theme_color": "#a855f7",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["communication", "social"],
+  "shortcuts": [
+    {
+      "name": "Open Chat",
+      "url": "/",
+      "description": "Open Zagel messaging"
+    }
+  ]
+}

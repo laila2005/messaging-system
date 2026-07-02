@@ -27,3 +27,7 @@ uploads/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Build Output
+frontend/dist/
+frontend/android/app/build/

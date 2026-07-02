@@ -22,6 +22,11 @@ allprojects {
         google()
         mavenCentral()
     }
+    tasks.withType(JavaCompile).configureEach {
+        javaCompiler = javaToolchains.compilerFor {
+            languageVersion = JavaLanguageVersion.of(23)
+        }
+    }
 }
 
 task clean(type: Delete) {

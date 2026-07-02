@@ -2,14 +2,35 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "main": "main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "electron": "electron ."
+    "electron": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.zagel.app",
+    "productName": "Zagel",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": null,
+    "files": [
+      "main.js",
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
   },
   "dependencies": {
+    "@capacitor-community/contacts": "^7.2.0",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/keyboard": "^8.0.3",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
@@ -25,6 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
