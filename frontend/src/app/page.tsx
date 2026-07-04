@@ -1385,12 +1385,12 @@ export default function ChatApp() {
           )}
 
 
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3 md:p-8 space-y-4 md:space-y-6 custom-scrollbar overflow-x-hidden">
             <AnimatePresence>
               {messages.filter(m => (chatMode === "broadcast" && m.type === "broadcast") || (chatMode === "direct" && m.type === "direct" && (m.recipient === selectedUser || m.sender === selectedUser))).map((msg) => (
-                <motion.div id={`msg-${msg.id}`} key={msg.id} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`flex ${msg.sender === username ? "justify-end" : "justify-start"}`}>
-                  <div className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${msg.sender === username ? "flex-row-reverse" : "flex-row"}`}>
-                    <div className="flex-shrink-0 mt-auto mb-1">{msg.sender === username && currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} className="w-8 h-8 rounded-full border border-white/10 object-cover" />) : (<div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${msg.sender === username ? 'bg-gradient-primary' : 'bg-[#1E1E1E]'}`}>{msg.sender.charAt(0).toUpperCase()}</div>)}</div>
+                <motion.div id={`msg-${msg.id}`} key={msg.id} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`flex ${msg.sender === username ? "justify-end" : "justify-start"} w-full`}>
+                  <div className={`flex gap-2 md:gap-3 max-w-[80%] md:max-w-[70%] ${msg.sender === username ? "flex-row-reverse" : "flex-row"}`}>
+                    <div className="flex-shrink-0 mt-auto mb-1 hidden md:block">{msg.sender === username && currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} className="w-8 h-8 rounded-full border border-white/10 object-cover" />) : (<div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${msg.sender === username ? 'bg-gradient-primary' : 'bg-[#1E1E1E]'}`}>{msg.sender.charAt(0).toUpperCase()}</div>)}</div>
                     <div className={`flex flex-col gap-1 ${msg.sender === username ? "items-end" : "items-start"}`}>
                       <div className="flex items-baseline gap-2 mx-1">
                         <span className="text-sm font-semibold text-white/90">{msg.sender === username ? "You" : msg.sender}</span>
@@ -1501,15 +1501,15 @@ export default function ChatApp() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <form onSubmit={handleSendMessage} className="pb-6 pt-2 bg-gradient-to-t from-[#080808] via-[#080808]/80 to-transparent relative z-10">
-              <div className="mx-4 md:mx-8 mb-6 relative bg-white/[0.04] backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+            <form onSubmit={handleSendMessage} className="pb-4 md:pb-6 pt-2 bg-gradient-to-t from-[#080808] via-[#080808]/80 to-transparent relative z-10">
+              <div className="mx-2 md:mx-8 mb-4 md:mb-6 relative bg-white/[0.04] backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
                 <textarea 
                   ref={textareaRef}
                   value={inputMessage} 
                   onChange={handleInput} 
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
                   placeholder="Type a message..."
-                  className="w-full bg-transparent py-4 pl-6 pr-40 text-[15px] text-white focus:outline-none placeholder-white/30 resize-none max-h-[120px] custom-scrollbar leading-tight"
+                  className="w-full bg-transparent py-4 pl-4 md:pl-6 pr-16 md:pr-40 text-[15px] text-white focus:outline-none placeholder-white/30 resize-none max-h-[120px] custom-scrollbar leading-tight"
                   rows={1}
                 />
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
@@ -1538,7 +1538,7 @@ export default function ChatApp() {
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors hidden sm:flex rounded-full hover:bg-white/5" title="Attach File"><Paperclip size={20} /></button>
                 <button type="button" onClick={toggleRecording} className={`w-11 h-11 flex items-center justify-center transition-colors hidden sm:flex rounded-full hover:bg-white/5 ${isRecording ? "text-red-500 animate-pulse bg-red-500/10" : "text-white/40 hover:text-white"}`} title="Voice Note"><Mic size={20} /></button>
                 <button type="button" onClick={() => setIsDisappearingChat(!isDisappearingChat)} className={`w-11 h-11 flex items-center justify-center transition-colors hidden sm:flex rounded-full hover:bg-white/5 ${isDisappearingChat ? "text-purple-400 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.3)]" : "text-white/40 hover:text-white"}`} title="24h Disappearing Messages"><Lock size={18} /></button>
-                <button type="button" onClick={handleSendMessage} disabled={!inputMessage.trim() && !attachmentFile} className={`ml-1 px-5 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all ${(inputMessage.trim() || attachmentFile) ? "bg-gradient-primary glow-primary text-white scale-100" : "bg-white/5 text-white/30 scale-95"}`}>Send <span className={(inputMessage.trim() || attachmentFile) ? "translate-x-0.5 transition-transform" : ""}>→</span></button>
+                <button type="button" onClick={handleSendMessage} disabled={!inputMessage.trim() && !attachmentFile} className={`ml-1 px-3 md:px-5 py-2.5 rounded-full flex items-center gap-1 md:gap-2 font-medium transition-all text-sm md:text-base ${(inputMessage.trim() || attachmentFile) ? "bg-gradient-primary glow-primary text-white scale-100" : "bg-white/5 text-white/30 scale-95"}`}><span className="hidden md:inline">Send</span> <span className={(inputMessage.trim() || attachmentFile) ? "translate-x-0.5 transition-transform" : ""}>→</span></button>
               </div>
               </div>
             </form>
