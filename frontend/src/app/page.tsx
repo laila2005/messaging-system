@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Globe, LogOut, Search, Smile, Paperclip, Mic, ArrowLeft, Phone, Video, PhoneOff, VideoOff, MicOff, PhoneCall, Sparkles, Play, Pause, Trash2, MapPin, Map, UserX, UserPlus, Monitor, Share2, Reply, Check, CheckCheck, Download, X, Forward, EyeOff } from "lucide-react";
+import { Lock, Globe, LogOut, Search, Smile, Paperclip, Mic, ArrowLeft, Phone, Video, PhoneOff, VideoOff, MicOff, PhoneCall, Sparkles, Play, Pause, Trash2, MapPin, Map, UserX, UserPlus, Monitor, Share2, Reply, Check, CheckCheck, Download, X, Forward, EyeOff, Bell } from "lucide-react";
 import { Contacts } from '@capacitor-community/contacts';
 import { Geolocation } from '@capacitor/geolocation';
 
@@ -1262,34 +1262,44 @@ export default function ChatApp() {
             );
           })}
           {incomingRequests.length > 0 && (
-            <div className="pt-4">
-              <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 px-4">Incoming Requests</h3>
-              {incomingRequests.map(req => (
-                <div key={req.id} className="w-full flex flex-col gap-2 px-4 py-3 bg-white/5 rounded-2xl mb-2 border border-white/10">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center font-bold text-sm text-white/80">{(req.requester_username || `User ${req.sender_id}`)?.charAt(0).toUpperCase()}</div>
-                    <span className="font-semibold text-[14px] truncate flex-1">{req.requester_username || `User #${req.sender_id}`}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await fetch(`${API_URL}/connections/accept/${req.id}`, { method: 'POST', headers: { "Authorization": `Bearer ${token}` } });
-                          fetchConnections();
-                        } catch(e) {}
-                      }}
-                      className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs py-1.5 rounded-lg transition-colors font-medium shadow-md">Accept</button>
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await fetch(`${API_URL}/connections/reject/${req.id}`, { method: 'POST', headers: { "Authorization": `Bearer ${token}` } });
-                          fetchConnections();
-                        } catch(e) {}
-                      }}
-                      className="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 text-xs py-1.5 rounded-lg transition-colors font-medium">Reject</button>
-                  </div>
+            <div className="mb-3 border border-purple-500/30 rounded-2xl overflow-hidden bg-purple-500/5">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-purple-600/10 border-b border-purple-500/20">
+                <div className="flex items-center gap-2">
+                  <Bell size={14} className="text-purple-400" />
+                  <h3 className="text-xs font-bold text-purple-300 uppercase tracking-wider">Connection Requests</h3>
                 </div>
-              ))}
+                <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">{incomingRequests.length}</span>
+              </div>
+              <div className="p-2 space-y-2">
+                {incomingRequests.map(req => (
+                  <div key={req.id} className="w-full flex items-center gap-3 px-3 py-2.5 bg-white/3 rounded-xl">
+                    <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center font-bold text-sm text-white/80 shrink-0">{(req.requester_username || `U`)?.charAt(0).toUpperCase()}</div>
+                    <span className="font-semibold text-[13px] truncate flex-1">{req.requester_username || `User #${req.sender_id}`}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await fetch(`${API_URL}/connections/accept/${req.id}`, { method: 'POST', headers: { "Authorization": `Bearer ${token}` } });
+                            setSystemAlert(`Accepted ${req.requester_username || 'user'}!`);
+                            setTimeout(() => setSystemAlert(null), 3000);
+                            fetchConnections();
+                          } catch(e) {}
+                        }}
+                        className="bg-purple-600 hover:bg-purple-500 text-white text-[11px] px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-md">Accept</button>
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await fetch(`${API_URL}/connections/reject/${req.id}`, { method: 'POST', headers: { "Authorization": `Bearer ${token}` } });
+                            fetchConnections();
+                          } catch(e) {}
+                        }}
+                        className="bg-white/5 hover:bg-red-600/20 text-white/50 hover:text-red-400 border border-white/10 hover:border-red-500/30 text-[11px] px-3 py-1.5 rounded-lg transition-colors font-medium">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
