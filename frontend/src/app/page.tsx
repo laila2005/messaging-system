@@ -1232,24 +1232,17 @@ export default function ChatApp() {
                   }
                 }
               } else {
-                try {
-                  const res = await fetch(`${API_URL}/connections/request/${user}`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${token}` }
-                  });
-                  if (res.ok) {
-                    setSystemAlert("Request sent!");
-                    setTimeout(() => setSystemAlert(null), 5000);
-                    fetchConnections();
-                  } else {
-                    const errorData = await res.json();
-                    setSystemAlert(errorData.detail || "Could not send request");
-                    setTimeout(() => setSystemAlert(null), 5000);
-                  }
-                } catch(e) {
-                  setSystemAlert("Error sending request");
-                  setTimeout(() => setSystemAlert(null), 5000);
+                // Open chat directly (WhatsApp-style) and send connection request in background
+                setChatMode("direct"); 
+                setSelectedUser(user);
+                if (unread > 0) {
+                  setUnreadCounts(prev => ({ ...prev, [user]: 0 }));
                 }
+                // Auto-send connection request in background (non-blocking)
+                fetch(`${API_URL}/connections/request/${user}`, {
+                  method: "POST",
+                  headers: { "Authorization": `Bearer ${token}` }
+                }).then(() => fetchConnections()).catch(() => {});
               }
             }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}>
               <div className="relative">
