@@ -472,8 +472,10 @@ export default function ChatApp() {
             }
 
             setMessages(prev => {
+              // Skip if we already have this exact server message
               if (prev.some(m => m.id === data.id)) return prev;
-              return [...prev, {
+              
+              const serverMsg = {
                 id: data.id, sender: data.sender_username, content: data.content,
                 type: data.recipient_id ? "direct" : "broadcast", recipient: data.recipient_username,
                 attachment_url: data.attachment_url,
@@ -486,7 +488,19 @@ export default function ChatApp() {
                 reply_to_content: data.reply_to_content,
                 timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                 status: data.status
-              }];
+              };
+              
+              // If this is from us, replace the optimistic message
+              if (isFromMe) {
+                const optimisticIdx = prev.findIndex(m => m.status === 'sending' && m.content === data.content && m.sender === data.sender_username);
+                if (optimisticIdx !== -1) {
+                  const updated = [...prev];
+                  updated[optimisticIdx] = serverMsg;
+                  return updated;
+                }
+              }
+              
+              return [...prev, serverMsg];
             });
           } else if (data.type === "typing") {
             if (chatModeRef.current === "direct" && selectedUserRef.current === data.sender_username) {
@@ -585,7 +599,12 @@ export default function ChatApp() {
           status: data.status || "sent",
           timestamp: new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         }));
-        setMessages(formatted);
+        setMessages(prev => {
+          // Merge: keep any WS messages that aren't in the history
+          const historyIds = new Set(formatted.map((m: any) => m.id));
+          const wsOnly = prev.filter((m: any) => !historyIds.has(m.id) && m.id > 1000000000); // WS/optimistic msgs have large IDs
+          return [...formatted, ...wsOnly];
+        });
       } else if (res.status === 401) {
         handleLogout();
       }
@@ -1013,6 +1032,23 @@ export default function ChatApp() {
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
       return;
     }
+
+    // Optimistic local message display (shows immediately, server echo is deduped)
+    const optimisticMsg = {
+      id: Date.now(), // temporary ID, will be replaced by server echo
+      sender: username,
+      recipient: selectedUser,
+      content: inputMessage,
+      attachment_url: attachment_url,
+      reply_to_id: replyingTo?.id || null,
+      reply_to_username: replyingTo?.sender || null,
+      reply_to_content: replyingTo?.content || null,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'sending',
+      type: chatMode === "broadcast" ? "broadcast" : "direct",
+      reactions: []
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
 
     ws.current.send(JSON.stringify({ 
       content: inputMessage, 
