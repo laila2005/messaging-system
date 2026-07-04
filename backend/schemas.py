@@ -32,7 +32,7 @@ class Token(BaseModel):
     token_type: str
 
 class MessageCreate(BaseModel):
-    content: str
+    content: Optional[str] = None
     recipient_id: Optional[int] = None # None means broadcast
     location_lat: Optional[str] = None
     location_lng: Optional[str] = None
@@ -63,6 +63,8 @@ class ConnectionRequestResponse(BaseModel):
     receiver_id: int
     status: str
     timestamp: datetime
+    requester_username: Optional[str] = None
+    target_username: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -237,6 +237,37 @@ export default function ChatApp() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Restore token from localStorage on mount (Bug 4: auto-login)
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+      setToken(savedToken);
+      // Fetch user profile to restore session
+      fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${savedToken}` } })
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Invalid token');
+        })
+        .then(userData => {
+          setUserId(userData.id);
+          setCurrentUser(userData);
+          setUsername(userData.username);
+          setProfileEmail(userData.email || '');
+          setProfilePhone(userData.phone_number || '');
+          setIsLoggedIn(true);
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+        });
+    }
+  }, []);
+
+  // Auto-scroll to bottom when messages change (Bug 9)
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
 
@@ -395,12 +426,13 @@ export default function ChatApp() {
       const res = await fetch(`${API_URL}/connections`, { headers: { "Authorization": `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        const accepted = data.filter((c: any) => c.status === "accepted");
-        setConnections(accepted);
-        const usernames = accepted.map((c: any) => c.requester_username === currentUser.username ? c.target_username : c.requester_username);
+        const friends = data.friends || [];
+        setConnections(friends);
+        const usernames = friends.map((f: any) => f.username);
         setConnectedUsernames(usernames);
         
-        setIncomingRequests(data.filter((c: any) => c.status === "pending" && c.target_username === currentUser.username));
+        const incoming = data.incoming_requests || [];
+        setIncomingRequests(incoming);
       }
     } catch (e) {
       console.error(e);
@@ -910,6 +942,7 @@ export default function ChatApp() {
       }
       const data = await res.json();
       setToken(data.access_token);
+      localStorage.setItem('token', data.access_token);
       const userRes = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${data.access_token}` } });
       const userData = await userRes.json();
       setUserId(userData.id); setCurrentUser(userData); setProfileEmail(userData.email || ""); setProfilePhone(userData.phone_number || "");
@@ -1182,7 +1215,7 @@ export default function ChatApp() {
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1 custom-scrollbar">
           <button onClick={() => { setChatMode("broadcast"); setSelectedUser(null); }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${chatMode === "broadcast" ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}><div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 text-white/70 flex items-center justify-center"><Globe size={20} /></div><div className="flex flex-col items-start"><span className="font-semibold text-[15px]">Global Room</span><span className="text-xs text-white/40">Public Broadcast</span></div></button>
           {filteredUsers.map(user => {
-            const isOnline = onlineUsers.includes(user);
+            const isUserOnline = onlineUsers.includes(user);
             const unread = unreadCounts[user] || 0;
             const isConnected = connectedUsernames.includes(user);
             return (
@@ -1221,11 +1254,11 @@ export default function ChatApp() {
             }} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all relative ${chatMode === "direct" && selectedUser === user ? "bg-white/5 shadow-[inset_4px_0_0_0_rgba(168,85,247,1)]" : "hover:bg-white/5"}`}>
               <div className="relative">
                 <div className="w-10 h-10 rounded-full bg-[#121212] border border-white/10 flex items-center justify-center font-bold text-lg text-white/80">{user.charAt(0).toUpperCase()}</div>
-                {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>}
+                {isUserOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0f1123] shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>}
               </div>
               <div className="flex flex-col items-start flex-1 overflow-hidden">
                 <span className={`font-semibold text-[15px] truncate w-full text-left ${unread > 0 ? "text-white" : "text-white/80"}`}>{user}</span>
-                <span className={`text-xs ${isOnline ? "text-green-400" : "text-white/40"}`}>{isOnline ? "online" : "offline"}</span>
+                <span className={`text-xs ${isUserOnline ? "text-green-400" : "text-white/40"}`}>{isUserOnline ? "online" : "offline"}</span>
               </div>
               {unread > 0 && (
                 <div className="flex items-center justify-center bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]">
@@ -1241,8 +1274,8 @@ export default function ChatApp() {
               {incomingRequests.map(req => (
                 <div key={req.id} className="w-full flex flex-col gap-2 px-4 py-3 bg-white/5 rounded-2xl mb-2 border border-white/10">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center font-bold text-sm text-white/80">{req.requester_username?.charAt(0).toUpperCase()}</div>
-                    <span className="font-semibold text-[14px] truncate flex-1">{req.requester_username}</span>
+                    <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center font-bold text-sm text-white/80">{(req.requester_username || `User ${req.sender_id}`)?.charAt(0).toUpperCase()}</div>
+                    <span className="font-semibold text-[14px] truncate flex-1">{req.requester_username || `User #${req.sender_id}`}</span>
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <button 
@@ -1267,7 +1300,7 @@ export default function ChatApp() {
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); setIsLoggedIn(false); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
+        <div className="p-4 border-t border-white/5"><div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-colors" onClick={() => setShowProfileModal(true)}>{currentUser?.avatar_url ? (<img src={`${API_URL}${currentUser.avatar_url}`} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md" />) : (<div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{username.charAt(0).toUpperCase()}</div>)}<div className="flex-1 overflow-hidden"><h3 className="font-semibold truncate text-[15px]">{username}</h3><p className="text-xs text-white/40">Edit Profile</p></div><button onClick={(e) => { e.stopPropagation(); handleLogout(); }} className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"><LogOut size={18} /></button></div></div>
       </div>
 
       {/* Main Area: Empty State OR Chat View */}
@@ -1281,7 +1314,7 @@ export default function ChatApp() {
           </div>
         </div>
       ) : (
-        <div className={`flex-1 flex flex-col h-full bg-[#080808] relative z-0 flex`}>
+        <div className={`flex-1 flex flex-col h-full bg-[#080808] relative z-0`}>
           <div className="h-[88px] px-4 md:px-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02] backdrop-blur-xl">
             <div className="flex items-center gap-2 md:gap-4">
               <button className="md:hidden w-11 h-11 flex items-center justify-center text-white/70 hover:text-white rounded-full hover:bg-white/5" onClick={() => setChatMode("none")}><ArrowLeft size={24} /></button>
@@ -1436,6 +1469,7 @@ export default function ChatApp() {
                   </div>
                 </motion.div>
               )}
+              <div ref={messagesEndRef} />
             </AnimatePresence>
           </div>
 
@@ -1576,19 +1610,14 @@ export default function ChatApp() {
                 </button>
 
                 {/* Connections */}
-                {connections.map((c: any) => {
-                  const friendUsername = c.sender_id === userId ? c.receiver_username || c.receiver_id : c.sender_username || c.sender_id;
-                  const cUsername = c.sender_username && c.sender_username !== username ? c.sender_username : (c.receiver_username || c.username || `User ${friendUsername}`);
-                  
-                  return (
-                    <button key={c.id} onClick={() => handleForwardTo(cUsername)} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-white/5 transition-colors text-left">
-                      <div>
-                        <div className="font-semibold text-sm">{cUsername}</div>
-                      </div>
-                      <Forward size={16} className="text-purple-400" />
-                    </button>
-                  );
-                })}
+                {connections.map((friend: any) => (
+                  <button key={friend.id} onClick={() => handleForwardTo(friend.username)} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-white/5 transition-colors text-left">
+                    <div>
+                      <div className="font-semibold text-sm">{friend.username}</div>
+                    </div>
+                    <Forward size={16} className="text-purple-400" />
+                  </button>
+                ))}
               </div>
               <button onClick={() => setForwardMessage(null)} className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 font-medium transition-colors text-center text-sm">Cancel</button>
             </motion.div>

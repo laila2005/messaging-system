@@ -33,7 +33,7 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     recipient_id = Column(Integer, ForeignKey("users.id"), nullable=True) # NULL means broadcast message
-    content = Column(Text, nullable=False) # Plaintext for broadcast, Encrypted for E2E
+    content = Column(Text, nullable=True) # Nullable to support attachment-only messages
     attachment_url = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String, default="sent") # sent, delivered, read
