@@ -565,20 +565,34 @@ export default function ChatApp() {
             setSystemAlert("New connection request!");
             setTimeout(() => setSystemAlert(null), 5000);
           } else if (data.type === "webrtc_offer") {
-            setIncomingCall({ sender: data.sender_username, senderId: data.sender_id, offer: data.payload, withVideo: data.withVideo });
+            setIncomingCall({ sender: data.sender_username, senderId: Number(data.sender_id), offer: data.payload, withVideo: data.withVideo });
           } else if (data.type === "webrtc_answer") {
-            if (pc.current) {
-              pc.current.setRemoteDescription(new RTCSessionDescription(data.payload)).then(() => {
+            if (pc.current && data.payload) {
+              pc.current.setRemoteDescription(new RTCSessionDescription(data.payload)).then(async () => {
                 while (iceCandidatesQueue.current.length > 0) {
-                  pc.current?.addIceCandidate(new RTCIceCandidate(iceCandidatesQueue.current.shift()!));
+                  const cand = iceCandidatesQueue.current.shift();
+                  if (cand && pc.current) {
+                    try {
+                      await pc.current.addIceCandidate(cand);
+                    } catch (e) {
+                      console.error("Error applying queued ICE candidate:", e);
+                    }
+                  }
                 }
-              });
+              }).catch(e => console.error("Error setting remote description from answer:", e));
             }
           } else if (data.type === "webrtc_ice") {
-            if (pc.current && pc.current.remoteDescription) {
-              pc.current.addIceCandidate(new RTCIceCandidate(data.payload));
-            } else {
-              iceCandidatesQueue.current.push(data.payload);
+            if (data.payload) {
+              try {
+                const cand = new RTCIceCandidate(data.payload);
+                if (pc.current && pc.current.remoteDescription && pc.current.remoteDescription.type) {
+                  pc.current.addIceCandidate(cand).catch(e => console.error("Error adding ice candidate:", e));
+                } else {
+                  iceCandidatesQueue.current.push(cand);
+                }
+              } catch (e) {
+                console.error("Invalid ICE candidate payload:", e);
+              }
             }
           } else if (data.type === "webrtc_hangup") {
             if (pc.current) { pc.current.close(); pc.current = null; }
@@ -826,9 +840,17 @@ export default function ChatApp() {
   };
 
   const getUserId = async (uname: string) => {
-    const res = await fetch(`${API_URL}/users`);
-    const users = await res.json();
-    return users.find((u: any) => u.username === uname)?.id;
+    try {
+      const res = await fetch(`${API_URL}/users`);
+      if (!res.ok) return null;
+      const users = await res.json();
+      const cleanTarget = uname.trim().toLowerCase();
+      const found = users.find((u: any) => u.username.trim().toLowerCase() === cleanTarget);
+      return found ? Number(found.id) : null;
+    } catch (e) {
+      console.error("Error fetching user ID:", e);
+      return null;
+    }
   };
 
   const startCall = async (withVideo: boolean) => {
@@ -838,13 +860,19 @@ export default function ChatApp() {
 
     setIsCalling(true);
     const stream = await navigator.mediaDevices.getUserMedia({ video: withVideo, audio: true });
+    stream.getAudioTracks().forEach(t => { t.enabled = true; });
     setLocalStream(stream);
 
     const peer = new RTCPeerConnection(rtcConfig);
     pc.current = peer;
 
     stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    peer.ontrack = (event) => setRemoteStream(event.streams[0]);
+    peer.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        event.streams[0].getAudioTracks().forEach(t => { t.enabled = true; });
+        setRemoteStream(event.streams[0]);
+      }
+    };
 
     peer.onicecandidate = (event) => {
       if (event.candidate && ws.current) {
@@ -871,13 +899,19 @@ export default function ChatApp() {
     setIsCalling(true);
     
     const stream = await navigator.mediaDevices.getUserMedia({ video: incomingCall.withVideo ?? true, audio: true });
+    stream.getAudioTracks().forEach(t => { t.enabled = true; });
     setLocalStream(stream);
 
     const peer = new RTCPeerConnection(rtcConfig);
     pc.current = peer;
 
     stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    peer.ontrack = (event) => setRemoteStream(event.streams[0]);
+    peer.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        event.streams[0].getAudioTracks().forEach(t => { t.enabled = true; });
+        setRemoteStream(event.streams[0]);
+      }
+    };
 
     peer.onicecandidate = (event) => {
       if (event.candidate && ws.current) {
@@ -1469,6 +1503,18 @@ export default function ChatApp() {
                 autoPlay
                 playsInline
                 className="w-full h-full object-cover md:object-contain bg-black"
+              />
+              {/* Dedicated Remote Audio Output Stream */}
+              <audio
+                ref={(el) => {
+                  if (el && remoteStream) {
+                    el.srcObject = remoteStream;
+                    el.volume = 1.0;
+                    el.play().catch((err) => console.log('Remote audio play trigger:', err));
+                  }
+                }}
+                autoPlay
+                playsInline
               />
               {/* No-signal overlay */}
               {!remoteStream && (
