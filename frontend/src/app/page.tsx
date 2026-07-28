@@ -271,7 +271,16 @@ export default function ChatApp() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
+  const rtcConfig = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
+      { urls: "stun:stun3.l.google.com:19302" },
+      { urls: "stun:stun4.l.google.com:19302" },
+      { urls: "stun:global.stun.twilio.com:3478" }
+    ]
+  };
 
   // ── Network / offline queue ──────────────────────────────────────────────
   useEffect(() => {
@@ -1450,49 +1459,69 @@ export default function ChatApp() {
 
           {/* Active Call — Theater Mode */}
           {isCalling && (
-            <div className={`relative bg-black overflow-hidden shrink-0 shadow-2xl transition-all duration-500 ${isCallFullscreen ? 'fixed inset-0 z-[200]' : 'h-[42%] min-h-[260px] border-b border-white/10'}`}>
+            <div className={`relative bg-black overflow-hidden shrink-0 shadow-2xl transition-all duration-500 ${isCallFullscreen ? 'fixed inset-0 z-[200]' : 'h-[40vh] min-h-[260px] max-h-[500px] border-b border-white/10'}`}>
               {/* Remote video (main view) */}
-              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+              <video
+                ref={(el) => {
+                  (remoteVideoRef as any).current = el;
+                  if (el && remoteStream) el.srcObject = remoteStream;
+                }}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover md:object-contain bg-black"
+              />
               {/* No-signal overlay */}
               {!remoteStream && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
-                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-3 text-3xl font-bold">{selectedUser?.charAt(0).toUpperCase()}</div>
-                  <p className="text-white/60 text-sm">Connecting…</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 z-10">
+                  <div className="w-20 h-20 rounded-full bg-purple-600/30 border-2 border-purple-500/50 flex items-center justify-center mb-3 text-3xl font-bold animate-pulse text-purple-200">{selectedUser?.charAt(0).toUpperCase()}</div>
+                  <p className="text-white/80 font-medium text-sm">Connecting to {selectedUser}…</p>
+                  <span className="text-xs text-purple-400/70 mt-1">Securing Peer-to-Peer Stream</span>
                 </div>
               )}
-              {/* Local PiP video (bottom-right) */}
-              <div className="absolute bottom-4 right-4 w-28 h-40 md:w-36 md:h-52 bg-black rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer" onClick={togglePiP} title="Pop out video">
-                <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover transition-all ${!isScreenSharing ? 'scale-x-[-1]' : ''} ${isCameraBlurred ? 'blur-md scale-110 brightness-90' : ''}`} />
+              {/* Local PiP video */}
+              <div className="absolute top-4 right-4 w-24 h-32 md:w-36 md:h-52 bg-black rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer z-20" onClick={togglePiP} title="Pop out video">
+                <video
+                  ref={(el) => {
+                    (localVideoRef as any).current = el;
+                    if (el && (isScreenSharing ? screenStreamRef.current : localStream)) {
+                      el.srcObject = isScreenSharing ? screenStreamRef.current : localStream;
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover transition-all ${!isScreenSharing ? 'scale-x-[-1]' : ''} ${isCameraBlurred ? 'blur-md scale-110 brightness-90' : ''}`}
+                />
               </div>
               {/* Telemetry Stats Badge */}
-              <div className="absolute top-4 right-4 bg-black/70 backdrop-blur-md text-white text-[11px] px-3 py-1.5 rounded-xl flex items-center gap-3 border border-white/10 shadow-lg">
+              <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md text-white text-[11px] px-3 py-1.5 rounded-xl flex items-center gap-2 border border-white/10 shadow-lg z-20">
                 <span className="flex items-center gap-1 text-green-400 font-semibold"><Sparkles size={10} /> {callStats.rtt > 0 ? `${callStats.rtt}ms` : 'HD'}</span>
                 {callStats.lossRate > 0 && <span className="text-amber-400 font-medium">Loss: {callStats.lossRate}%</span>}
                 {callStats.bitrate > 0 && <span className="text-white/60">{callStats.bitrate} kbps</span>}
               </div>
               {/* Screen share badge */}
               {isScreenSharing && (
-                <div className="absolute top-4 left-4 bg-purple-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg">
+                <div className="absolute top-14 left-4 bg-purple-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
                   <Monitor size={12} /> Sharing screen
                 </div>
               )}
               {/* Recording badge */}
               {isRecordingCall && (
-                <div className="absolute top-4 left-32 bg-red-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg animate-pulse">
+                <div className="absolute top-14 left-36 bg-red-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg animate-pulse z-20">
                   <span className="w-2 h-2 bg-white rounded-full"></span> REC
                 </div>
               )}
               {/* Controls bar */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-3 bg-black/60 backdrop-blur-md rounded-full px-4 py-2.5 shadow-2xl border border-white/10">
-                <button onClick={toggleAudio} title={isAudioMuted ? 'Unmute' : 'Mute'} className={`w-11 h-11 flex items-center justify-center rounded-full transition-all ${isAudioMuted ? 'bg-white text-black scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}>{isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}</button>
-                <button onClick={toggleVideo} title={isVideoMuted ? 'Start video' : 'Stop video'} className={`w-11 h-11 flex items-center justify-center rounded-full transition-all ${isVideoMuted ? 'bg-white text-black scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}>{isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}</button>
-                <button onClick={toggleScreenShare} title={isScreenSharing ? 'Stop sharing' : 'Share screen'} className={`w-11 h-11 flex items-center justify-center rounded-full transition-all ${isScreenSharing ? 'bg-purple-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}><Monitor size={18} /></button>
-                <button onClick={() => setIsCameraBlurred(!isCameraBlurred)} title={isCameraBlurred ? 'Disable privacy blur' : 'Enable privacy blur'} className={`w-11 h-11 flex items-center justify-center rounded-full transition-all ${isCameraBlurred ? 'bg-purple-600 text-white scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}><EyeOff size={18} /></button>
-                <button onClick={toggleCallRecording} title={isRecordingCall ? 'Stop recording' : 'Record call'} className={`w-11 h-11 flex items-center justify-center rounded-full transition-all ${isRecordingCall ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-white hover:bg-white/20'}`}><Download size={18} /></button>
-                <button onClick={togglePiP} title="Picture-in-Picture" className="w-11 h-11 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"><Share2 size={18} /></button>
-                <button onClick={() => setIsCallFullscreen(!isCallFullscreen)} title={isCallFullscreen ? 'Exit fullscreen' : 'Fullscreen'} className="w-11 h-11 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"><Forward size={18} /></button>
-                <div className="w-px h-6 bg-white/20 mx-1"></div>
-                <button onClick={endCall} title="End call" className="w-12 h-12 flex items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.6)] hover:bg-red-600 transition-colors"><PhoneOff size={20} /></button>
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto custom-scrollbar flex items-center gap-2 md:gap-3 bg-black/75 backdrop-blur-xl rounded-full px-4 py-2 shadow-2xl border border-white/15 z-30">
+                <button onClick={toggleAudio} title={isAudioMuted ? 'Unmute' : 'Mute'} className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all shrink-0 ${isAudioMuted ? 'bg-white text-black scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}>{isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}</button>
+                <button onClick={toggleVideo} title={isVideoMuted ? 'Start video' : 'Stop video'} className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all shrink-0 ${isVideoMuted ? 'bg-white text-black scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}>{isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}</button>
+                <button onClick={toggleScreenShare} title={isScreenSharing ? 'Stop sharing' : 'Share screen'} className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all shrink-0 ${isScreenSharing ? 'bg-purple-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}><Monitor size={18} /></button>
+                <button onClick={() => setIsCameraBlurred(!isCameraBlurred)} title={isCameraBlurred ? 'Disable privacy blur' : 'Enable privacy blur'} className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all shrink-0 ${isCameraBlurred ? 'bg-purple-600 text-white scale-95' : 'bg-white/10 text-white hover:bg-white/20'}`}><EyeOff size={18} /></button>
+                <button onClick={toggleCallRecording} title={isRecordingCall ? 'Stop recording' : 'Record call'} className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all shrink-0 ${isRecordingCall ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-white hover:bg-white/20'}`}><Download size={18} /></button>
+                <button onClick={togglePiP} title="Picture-in-Picture" className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all shrink-0"><Share2 size={18} /></button>
+                <button onClick={() => setIsCallFullscreen(!isCallFullscreen)} title={isCallFullscreen ? 'Exit fullscreen' : 'Fullscreen'} className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all shrink-0"><Forward size={18} /></button>
+                <div className="w-px h-6 bg-white/20 mx-1 shrink-0"></div>
+                <button onClick={endCall} title="End call" className="w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.6)] hover:bg-red-600 transition-colors shrink-0"><PhoneOff size={20} /></button>
               </div>
             </div>
           )}

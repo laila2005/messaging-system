@@ -576,13 +576,18 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
             
             msg_type = message_data.get("type", "message")
             recipient_id = message_data.get("recipient_id") # None if broadcast
+            if recipient_id is not None:
+                try:
+                    recipient_id = int(recipient_id)
+                except (ValueError, TypeError):
+                    pass
             
             if msg_type == "ping":
                 continue
 
             # Handle WebRTC Signaling and Typing indicators
             if msg_type in ["webrtc_offer", "webrtc_answer", "webrtc_ice", "webrtc_hangup", "typing"]:
-                if recipient_id:
+                if recipient_id is not None:
                     signal_payload = {
                         "type": msg_type,
                         "sender_username": user.username,
@@ -596,6 +601,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
 
             if msg_type == "mark_read":
                 sender_id = message_data.get("sender_id")
+                if sender_id is not None:
+                    try:
+                        sender_id = int(sender_id)
+                    except (ValueError, TypeError):
+                        pass
                 unread_msgs = db.query(models.Message).filter(
                     models.Message.recipient_id == user.id,
                     models.Message.sender_id == sender_id,
