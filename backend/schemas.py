@@ -43,7 +43,7 @@ class MessageResponse(BaseModel):
     id: int
     sender_id: int
     recipient_id: Optional[int]
-    content: str
+    content: Optional[str] = None
     timestamp: datetime
     status: str
     sender_username: str

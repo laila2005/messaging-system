@@ -2,7 +2,8 @@ import json
 import jwt
 import os
 import shutil
-from typing import Dict, List
+from typing import Dict, List, Set
+from collections import defaultdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,28 +34,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Connection Manager for WebSockets
+# Connection Manager for WebSockets supporting Multi-Device Concurrent Connections
 class ConnectionManager:
     def __init__(self):
-        # Maps user_id to their active WebSocket connection
-        self.active_connections: Dict[int, WebSocket] = {}
+        # Maps user_id to set of active WebSocket connections across all devices
+        self.active_connections: Dict[int, Set[WebSocket]] = defaultdict(set)
 
     async def connect(self, websocket: WebSocket, user_id: int):
         await websocket.accept()
-        self.active_connections[user_id] = websocket
+        self.active_connections[user_id].add(websocket)
 
-    def disconnect(self, user_id: int):
+    def disconnect(self, websocket: WebSocket, user_id: int):
         if user_id in self.active_connections:
-            del self.active_connections[user_id]
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
 
     async def send_personal_message(self, message: str, user_id: int):
         if user_id in self.active_connections:
-            await self.active_connections[user_id].send_text(message)
+            dead_sockets = []
+            for ws in list(self.active_connections[user_id]):
+                try:
+                    await ws.send_text(message)
+                except Exception:
+                    dead_sockets.append(ws)
+            for ws in dead_sockets:
+                self.disconnect(ws, user_id)
 
     async def broadcast(self, message: str, exclude_user_id: int = None):
-        for uid, connection in self.active_connections.items():
+        for uid, connections in list(self.active_connections.items()):
             if uid != exclude_user_id:
-                await connection.send_text(message)
+                dead_sockets = []
+                for ws in list(connections):
+                    try:
+                        await ws.send_text(message)
+                    except Exception:
+                        dead_sockets.append(ws)
+                for ws in dead_sockets:
+                    self.disconnect(ws, uid)
 
 manager = ConnectionManager()
 
@@ -564,7 +581,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
                 continue
 
             # Handle WebRTC Signaling and Typing indicators
-            if msg_type in ["webrtc_offer", "webrtc_answer", "webrtc_ice", "typing"]:
+            if msg_type in ["webrtc_offer", "webrtc_answer", "webrtc_ice", "webrtc_hangup", "typing"]:
                 if recipient_id:
                     signal_payload = {
                         "type": msg_type,
@@ -703,8 +720,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
                 await manager.broadcast(json.dumps(out_msg))
                 
     except WebSocketDisconnect:
-        manager.disconnect(user.id)
-        await manager.broadcast(json.dumps({
-            "type": "system",
-            "content": f"{user.username} left the chat"
-        }))
+        manager.disconnect(websocket, user.id)
+        if user.id not in manager.active_connections:
+            await manager.broadcast(json.dumps({
+                "type": "system",
+                "content": f"{user.username} left the chat"
+            }))

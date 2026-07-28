@@ -359,14 +359,32 @@ export default function ChatApp() {
       if (videoTrack) {
         pc.current.getSenders().find(s => s.track?.kind === 'video')?.replaceTrack(videoTrack);
       }
+      if (localVideoRef.current && localStream) {
+        localVideoRef.current.srcObject = localStream;
+      }
       setIsScreenSharing(false);
     } else {
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+          audio: true
+        });
         screenStreamRef.current = screenStream;
         const screenTrack = screenStream.getVideoTracks()[0];
-        pc.current.getSenders().find(s => s.track?.kind === 'video')?.replaceTrack(screenTrack);
-        screenTrack.onended = () => { setIsScreenSharing(false); const vt = localStream?.getVideoTracks()[0]; if (vt) pc.current?.getSenders().find(s => s.track?.kind === 'video')?.replaceTrack(vt); };
+        const videoSender = pc.current.getSenders().find(s => s.track?.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(screenTrack);
+        }
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = screenStream;
+        }
+        screenTrack.onended = () => {
+          setIsScreenSharing(false);
+          screenStreamRef.current = null;
+          const vt = localStream?.getVideoTracks()[0];
+          if (vt && videoSender) videoSender.replaceTrack(vt).catch(console.error);
+          if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+        };
         setIsScreenSharing(true);
       } catch (e) { console.error('Screen share denied', e); }
     }
@@ -540,6 +558,17 @@ export default function ChatApp() {
             } else {
               iceCandidatesQueue.current.push(data.payload);
             }
+          } else if (data.type === "webrtc_hangup") {
+            if (pc.current) { pc.current.close(); pc.current = null; }
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); setLocalStream(null); }
+            if (screenStreamRef.current) { screenStreamRef.current.getTracks().forEach(t => t.stop()); screenStreamRef.current = null; }
+            setRemoteStream(null);
+            setIsCalling(false);
+            setIsScreenSharing(false);
+            setIncomingCall(null);
+            iceCandidatesQueue.current = [];
+            setSystemAlert("Call ended by remote user.");
+            setTimeout(() => setSystemAlert(null), 3000);
           }
         };
         
@@ -801,6 +830,15 @@ export default function ChatApp() {
       }
     };
 
+    peer.oniceconnectionstatechange = () => {
+      if (peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'disconnected') {
+        peer.createOffer({ iceRestart: true }).then(offer => {
+          peer.setLocalDescription(offer);
+          ws.current?.send(JSON.stringify({ type: "webrtc_offer", recipient_id: targetId, payload: offer, withVideo: withVideo }));
+        }).catch(console.error);
+      }
+    };
+
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     ws.current?.send(JSON.stringify({ type: "webrtc_offer", recipient_id: targetId, payload: offer, withVideo: withVideo }));
@@ -825,6 +863,15 @@ export default function ChatApp() {
       }
     };
 
+    peer.oniceconnectionstatechange = () => {
+      if (peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'disconnected') {
+        peer.createOffer({ iceRestart: true }).then(offer => {
+          peer.setLocalDescription(offer);
+          ws.current?.send(JSON.stringify({ type: "webrtc_offer", recipient_id: incomingCall.senderId, payload: offer, withVideo: incomingCall.withVideo ?? true }));
+        }).catch(console.error);
+      }
+    };
+
     await peer.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
     while (iceCandidatesQueue.current.length > 0) {
       peer.addIceCandidate(new RTCIceCandidate(iceCandidatesQueue.current.shift()!));
@@ -836,11 +883,22 @@ export default function ChatApp() {
     setIncomingCall(null);
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    const targetName = selectedUser || incomingCall?.sender;
+    if (targetName) {
+      try {
+        const targetId = await getUserId(targetName);
+        if (targetId && ws.current && ws.current.readyState === WebSocket.OPEN) {
+          ws.current.send(JSON.stringify({ type: "webrtc_hangup", recipient_id: targetId }));
+        }
+      } catch (e) {}
+    }
     if (pc.current) { pc.current.close(); pc.current = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); setLocalStream(null); }
+    if (screenStreamRef.current) { screenStreamRef.current.getTracks().forEach(t => t.stop()); screenStreamRef.current = null; }
     setRemoteStream(null);
     setIsCalling(false);
+    setIsScreenSharing(false);
     setIncomingCall(null);
     iceCandidatesQueue.current = [];
   };
