@@ -218,6 +218,8 @@ export default function ChatApp() {
   const callRecorderRef = useRef<MediaRecorder | null>(null);
   const callChunksRef = useRef<Blob[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [callStats, setCallStats] = useState<{ rtt: number; lossRate: number; bitrate: number }>({ rtt: 0, lossRate: 0, bitrate: 0 });
   
   // Reply-to / quoting
   const [replyingTo, setReplyingTo] = useState<any>(null);
@@ -308,25 +310,36 @@ export default function ChatApp() {
         if (!pc.current) return;
         try {
           const stats = await pc.current.getStats();
+          let currentRtt = 0;
+          let currentLoss = 0;
+          let currentBitrate = 0;
+
           stats.forEach(report => {
+            if (report.type === 'remote-candidate-pair' && report.currentRoundTripTime) {
+              currentRtt = Math.round(report.currentRoundTripTime * 1000);
+            }
             if (report.type === 'inbound-rtp' && report.kind === 'video') {
               const packetsLost = report.packetsLost || 0;
               const packetsReceived = report.packetsReceived || 1;
-              const lossRate = packetsLost / packetsReceived;
-              if (lossRate > 0.05) { // more than 5% packet loss
+              currentLoss = Math.round((packetsLost / (packetsLost + packetsReceived)) * 100);
+              if (report.bytesReceived && report.timestamp) {
+                currentBitrate = Math.round((report.bytesReceived * 8) / 1000);
+              }
+              if (currentLoss > 5) {
                 const sender = pc.current?.getSenders().find(s => s.track?.kind === 'video');
                 if (sender) {
                   const params = sender.getParameters();
                   if (params.encodings && params.encodings.length > 0) {
-                    params.encodings[0].maxBitrate = 100000; // cap at 100kbps on bad network
+                    params.encodings[0].maxBitrate = 100000;
                     sender.setParameters(params).catch(console.error);
                   }
                 }
               }
             }
           });
+          setCallStats({ rtt: currentRtt, lossRate: currentLoss, bitrate: currentBitrate });
         } catch (e) { console.error('Failed to monitor WebRTC stats', e); }
-      }, 5000);
+      }, 3000);
     }
     return () => clearInterval(interval);
   }, [isCalling]);
@@ -1451,6 +1464,12 @@ export default function ChatApp() {
               <div className="absolute bottom-4 right-4 w-28 h-40 md:w-36 md:h-52 bg-black rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer" onClick={togglePiP} title="Pop out video">
                 <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover transition-all ${!isScreenSharing ? 'scale-x-[-1]' : ''} ${isCameraBlurred ? 'blur-md scale-110 brightness-90' : ''}`} />
               </div>
+              {/* Telemetry Stats Badge */}
+              <div className="absolute top-4 right-4 bg-black/70 backdrop-blur-md text-white text-[11px] px-3 py-1.5 rounded-xl flex items-center gap-3 border border-white/10 shadow-lg">
+                <span className="flex items-center gap-1 text-green-400 font-semibold"><Sparkles size={10} /> {callStats.rtt > 0 ? `${callStats.rtt}ms` : 'HD'}</span>
+                {callStats.lossRate > 0 && <span className="text-amber-400 font-medium">Loss: {callStats.lossRate}%</span>}
+                {callStats.bitrate > 0 && <span className="text-white/60">{callStats.bitrate} kbps</span>}
+              </div>
               {/* Screen share badge */}
               {isScreenSharing && (
                 <div className="absolute top-4 left-4 bg-purple-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg">
@@ -1732,6 +1751,25 @@ export default function ChatApp() {
               <h2 className="text-2xl font-bold mb-1">{incomingCall.sender}</h2>
               <p className="text-white/50 mb-8">Incoming {(incomingCall.withVideo ?? true) ? "video" : "audio"} call...</p>
               <div className="flex gap-4 justify-center"><button onClick={() => { setIncomingCall(null); iceCandidatesQueue.current = []; }} className="w-14 h-14 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors border border-red-500/50"><PhoneOff size={24} /></button><button onClick={acceptCall} className="w-14 h-14 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center hover:bg-green-500 hover:text-white transition-colors border border-green-500/50"><Phone size={24} /></button></div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Image Lightbox Modal */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={() => setLightboxImage(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+              <img src={lightboxImage} alt="Enlarged media" className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()} />
+              <div className="mt-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                <a href={lightboxImage} download target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-4 py-2 rounded-full font-medium shadow-lg transition-colors flex items-center gap-1.5">
+                  <Download size={14} /> Download Image
+                </a>
+                <button onClick={() => setLightboxImage(null)} className="bg-white/10 hover:bg-white/20 text-white text-xs px-4 py-2 rounded-full font-medium transition-colors">
+                  Close
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
